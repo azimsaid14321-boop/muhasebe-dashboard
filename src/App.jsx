@@ -586,19 +586,20 @@ function Dashboard() {
         const currentFile = selectedFiles[i];
         const fileName = currentFile.name;
 
-        // 1. Upload to raporlar bucket
+        // 1. Upload to receipt_images bucket
         const filePath = `${currentUser.id}/${currentFile.name}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('raporlar')
-          .upload(filePath, currentFile, { cacheControl: '3600', upsert: true, contentType: currentFile.type });
-
-        if (uploadError) throw new Error('Dosya yüklenemedi. Lütfen tekrar deneyin.');
-
+          .from('receipt_images')
+          .upload(filePath, currentFile, {
+            cacheControl: '3600',
+            upsert: true, // KESİN KURAL: Aynı dosya varsa üzerine yaz!
+            contentType: currentFile.type
+          });
         // 2. Public URL
         const storedPath = uploadData?.path ?? filePath;
         const { data: publicUrlData } = supabase.storage
-          .from('raporlar')
+          .from('receipt_images')
           .getPublicUrl(storedPath);
 
         const fileUrl = publicUrlData?.publicUrl;
@@ -794,6 +795,10 @@ function Dashboard() {
     const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 saniye timeout (120000 ms)
 
     try {
+      // 1. Kullanıcı oturum bilgisini al (Güvenlik / Klasör izolesi için)
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id || '';
+
       const exportData = completedItems.map(item => ({
         ...parseExtractedData(item)
       }));
@@ -806,7 +811,8 @@ function Dashboard() {
         },
         body: JSON.stringify({
           dosyaIsmi: reportName,
-          items: exportData
+          items: exportData,
+          user_id: userId
         }),
         signal: controller.signal // AbortController sinyali
       });
