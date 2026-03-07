@@ -591,7 +591,7 @@ function Dashboard() {
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('raporlar')
-          .upload(filePath, currentFile, { upsert: false });
+          .upload(filePath, currentFile, { cacheControl: '3600', upsert: true, contentType: currentFile.type });
 
         if (uploadError) throw new Error('Dosya yüklenemedi. Lütfen tekrar deneyin.');
 
