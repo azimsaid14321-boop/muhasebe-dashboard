@@ -95,8 +95,8 @@ function Dashboard() {
         });
 
       if (!reportsError && recentReports) {
-        // Boş ghost dosyaları filtrele
-        const validRecent = recentReports.filter(f => f.name && f.name !== '.emptyFolderPlaceholder');
+        // Boş ghost dosyaları filtrele ve SADECE .xlsx uzantılı dosyaları al ('Geçmiş Raporlar Çöplüğü' onarımı)
+        const validRecent = recentReports.filter(f => f.name && f.name !== '.emptyFolderPlaceholder' && f.name.toLowerCase().includes('.xlsx'));
         setRecentActivities(validRecent);
       }
     } catch (error) {
@@ -361,8 +361,8 @@ function Dashboard() {
       if (error) {
         console.error('Error fetching reports:', error);
       } else {
-        // Filter out empty ghost files or folders
-        const validFiles = data?.filter(file => file.name && file.name !== '.emptyFolderPlaceholder') || [];
+        // Filter out empty ghost files or folders and ONLY allow .xlsx files (Çöplük Onarımı)
+        const validFiles = data?.filter(file => file.name && file.name !== '.emptyFolderPlaceholder' && file.name.toLowerCase().includes('.xlsx')) || [];
         setReports(validFiles);
       }
     } catch (err) {
@@ -759,6 +759,26 @@ function Dashboard() {
     }
   };
 
+  const handleClearList = async () => {
+    // DB'deki evrakları İPTAL EDİLMİŞ statüsüne çek
+    const activeIds = islemListesi.map(it => it.id);
+    if (activeIds.length > 0) {
+      try {
+        await supabase.from('evrak_islemleri').update({ status: 'İPTAL EDİLDİ' }).in('id', activeIds);
+      } catch (e) {
+        console.error("Listeyi temizlerken durum güncellemesi başarısız oldu:", e);
+      }
+    }
+
+    // UI'daki tüm işlem state'lerini sıfırla
+    setIslemListesi([]);
+    setFailedWebhooks([]);
+    setSessionBatchIds([]);
+    setUploadQueue([]);
+    setReportName('');
+    showToast('Liste temizlendi ve evrak işlemleri iptal edildi.', 'success');
+  };
+
   // ─── Excel'e Toplu Gönderim (İkinci Aşama) ───
   const handleExportToExcel = async () => {
     if (isExporting) return; // Mükerrer İstek Kilidi (Double-Click Prevention)
@@ -802,10 +822,11 @@ function Dashboard() {
 
       showToast("Onaylanan evraklar Excel'e aktarıldı!", 'success');
 
-      // Aktarılan evrakları listeden sil ki UI temiz kalsın
-      const completedIds = completedItems.map(item => item.id);
-      setSessionBatchIds(prev => prev.filter(id => !completedIds.includes(id)));
-      setIslemListesi(prev => prev.filter(item => !completedIds.includes(item.id)));
+      // UX Kuralı: Otomatik Temizlik (Tüm listeyi sıfırla ki tertemiz başlansın ve asılı kalanlar silinsin)
+      setIslemListesi([]);
+      setFailedWebhooks([]);
+      setSessionBatchIds([]);
+      setUploadQueue([]);
 
       // Toplu işlem bittiğine göre Input hafızasını sıfırla
       setReportName('');
@@ -1328,20 +1349,29 @@ function Dashboard() {
                               : "Gönderime hazır evrak yok."}
                             {completedCount > 0 && " Excel'e aktarılmaya hazır."}
                           </p>
-                          <button
-                            onClick={handleExportToExcel}
-                            disabled={isBtnDisabled}
-                            className={`relative overflow-hidden group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
-                              ? 'bg-[#18181B]/50 border border-white/5 text-gray-600 cursor-not-allowed'
-                              : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_25px_rgba(16,185,129,0.5)] hover:-translate-y-1'
-                              }`}
-                          >
-                            {!isBtnDisabled && <span className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-600 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 z-0" />}
-                            <span className="relative z-10 flex items-center gap-2">
-                              {isExporting ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                              {isExporting ? "Aktarılıyor..." : "Tamamlananları Excel'e Aktar"}
-                            </span>
-                          </button>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={handleClearList}
+                              className="px-5 py-3.5 rounded-xl border border-white/10 hover:border-red-500/30 bg-transparent hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-sm font-bold flex items-center gap-2 transition-all duration-300 shadow-inner group font-sans"
+                            >
+                              <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
+                              Listeyi Temizle
+                            </button>
+                            <button
+                              onClick={handleExportToExcel}
+                              disabled={isBtnDisabled}
+                              className={`relative overflow-hidden group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
+                                ? 'bg-[#18181B]/50 border border-white/5 text-gray-600 cursor-not-allowed'
+                                : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_25px_rgba(16,185,129,0.5)] hover:-translate-y-1'
+                                }`}
+                            >
+                              {!isBtnDisabled && <span className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-600 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 z-0" />}
+                              <span className="relative z-10 flex items-center gap-2">
+                                {isExporting ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                                {isExporting ? "Aktarılıyor..." : "Tamamlananları Excel'e Aktar"}
+                              </span>
+                            </button>
+                          </div>
                         </div>
                       );
                     })()}
