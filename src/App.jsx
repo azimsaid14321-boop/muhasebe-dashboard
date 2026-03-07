@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
 import {
-  Clock, ShieldCheck, ChevronRight, Play, ChevronDown,
+  Clock, ShieldCheck, ChevronRight, Play, ChevronDown, PanelLeftClose, PanelLeftOpen,
   LayoutDashboard, FileText, History, DollarSign, Zap, Settings, LogOut, UploadCloud,
-  Mail, Lock, ArrowLeft, Check, Plus, Sparkles, Trash2, Search, Download, Activity, ToggleLeft, ToggleRight, Loader2, ChevronRight as Next,
+  Mail, Lock, ArrowLeft, Check, Plus, Sparkles, Trash2, Search, Download, Activity, ToggleLeft, ToggleRight, Loader2, ChevronRight as Next, RefreshCcw,
   List, Eye, FileSignature, X
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -41,10 +41,72 @@ function Dashboard() {
   };
 
   const [activeTab, setActiveTab] = useState('z-raporlari');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [autoDownload, setAutoDownload] = useState(true);
   const [notifyEnd, setNotifyEnd] = useState(false);
   const [reports, setReports] = useState([]);
   const [loadingReports, setLoadingReports] = useState(false);
+  const [dashboardStats, setDashboardStats] = useState({ toplamEvrak: 0, tasarrufZamani: '0 Dakika' });
+  const [recentActivities, setRecentActivities] = useState([]);
+
+  useEffect(() => {
+    if (activeTab === 'panel') {
+      fetchDashboardData();
+    }
+  }, [activeTab]);
+
+  const fetchDashboardData = async () => {
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const currentUser = userData?.user;
+
+      if (userError || !currentUser) return;
+
+      // 1. Toplam Evrak ve Tasarruf Zamanı
+      const { count, error: countError } = await supabase
+        .from('evrak_islemleri')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', currentUser.id);
+
+      if (!countError) {
+        const evrakSayisi = count || 0;
+        const totalMinutes = evrakSayisi * 1; // Her evrak 1 dakika
+
+        let tasarrufText = `${totalMinutes} Dakika`;
+        if (totalMinutes >= 60) {
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          tasarrufText = minutes > 0 ? `${hours} Saat ${minutes} Dakika` : `${hours} Saat`;
+        }
+
+        setDashboardStats({
+          toplamEvrak: evrakSayisi,
+          tasarrufZamani: tasarrufText
+        });
+      }
+
+      // 2. Son Aktiviteler (Son 5 Kayıt - Geçmiş Raporlar Mantığı)
+      const { data: recentReports, error: reportsError } = await supabase.storage
+        .from('raporlar')
+        .list(currentUser.id, {
+          limit: 5,
+          sortBy: { column: 'created_at', order: 'desc' }
+        });
+
+      if (!reportsError && recentReports) {
+        // Boş ghost dosyaları filtrele
+        const validRecent = recentReports.filter(f => f.name && f.name !== '.emptyFolderPlaceholder');
+        setRecentActivities(validRecent);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    }
+  };
+
+  const filteredVeriler = reports.filter(item =>
+    item.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [toastMessage, setToastMessage] = useState({ text: '', type: '', visible: false });
@@ -280,12 +342,27 @@ function Dashboard() {
   const fetchReports = async () => {
     setLoadingReports(true);
     try {
-      const { data, error } = await supabase.storage.from('raporlar').list();
+      // 1. Kullanıcıyı alıyoruz
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const currentUser = userData?.user;
+
+      if (userError || !currentUser) {
+        setReports([]);
+        return;
+      }
+
+      // 2. Güvenlik filtresi: Sadece sistemdeki aktif kullanıcının kendi ID'sine ait klasörü listeliyoruz
+      // Storage API olduğu için .eq('user_id', currentUser.id) yerine klasör path'ini currentUser.id olarak veriyoruz.
+      const { data, error } = await supabase.storage.from('raporlar').list(currentUser.id, {
+        limit: 100,
+        sortBy: { column: 'created_at', order: 'desc' }
+      });
+
       if (error) {
         console.error('Error fetching reports:', error);
       } else {
-        // Filter out empty ghost files or folders if needed, e.g., using a valid extension check or simply keeping all non-empty names
-        const validFiles = data.filter(file => file.name && file.name !== '.emptyFolderPlaceholder');
+        // Filter out empty ghost files or folders
+        const validFiles = data?.filter(file => file.name && file.name !== '.emptyFolderPlaceholder') || [];
         setReports(validFiles);
       }
     } catch (err) {
@@ -297,7 +374,14 @@ function Dashboard() {
 
   const handleDownload = async (fileName) => {
     try {
-      const { data } = supabase.storage.from('raporlar').getPublicUrl(fileName);
+      const { data: userData } = await supabase.auth.getUser();
+      const currentUser = userData?.user;
+
+      if (!currentUser) return;
+
+      const filePath = `${currentUser.id}/${fileName}`;
+      const { data } = supabase.storage.from('raporlar').getPublicUrl(filePath);
+
       if (data && data.publicUrl) {
         window.open(data.publicUrl, '_blank');
       }
@@ -332,7 +416,7 @@ function Dashboard() {
 
     try {
       console.log(`[Webhook] Senkron istek başlatılıyor... (Record ID: ${recordId})`);
-      const response = await fetch('https://n8n.akista.me/webhook/analyze-receipt', {
+      const response = await fetch('https://azimdeneme.app.n8n.cloud/webhook/analyze-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -394,6 +478,17 @@ function Dashboard() {
 
     } catch (err) {
       clearTimeout(timeoutId);
+
+      if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        console.error("%c[CORS / NETWORK HATASI]:", "color: red", err);
+        showToast("Bağlantı Hatası: Tarayıcı CORS engeli veya n8n akışı kapalı (Active değil).", "error");
+
+        await supabase.from('evrak_islemleri').update({ status: 'HATA' }).eq('id', recordId);
+        setIslemListesi(prev => prev.map(it => it.id === recordId ? { ...it, status: 'HATA' } : it));
+        setUploadQueue(prev => prev.map(q => q.recordId === recordId ? { ...q, status: 'HATA' } : q));
+        return { success: false, isTimeout: false };
+      }
+
       console.error(`[Webhook] Hata:`, err);
 
       if (err.name === 'AbortError' || err.message === 'TIMEOUT') {
@@ -412,18 +507,37 @@ function Dashboard() {
   };
 
   const handleManualRetry = async (failedItem) => {
-    setFailedWebhooks(prev => prev.map(item => item.recordId === failedItem.recordId ? { ...item, isRetrying: true } : item));
-    await supabase.from('evrak_islemleri').update({ status: 'pending' }).eq('id', failedItem.recordId);
+    if (!failedItem.recordId || !failedItem.fileUrl) {
+      showToast('Eksik evrak bilgisi, istek gönderilemiyor.', 'error');
+      return;
+    }
 
-    // Pass the originally selected metrics so the retry payload is identical
-    const success = await triggerWebhookWithRetry(failedItem.recordId, failedItem.fileUrl, failedItem.metrics ?? [], 3);
+    try {
+      // 1. Loading state'ini aktif et
+      setFailedWebhooks(prev => prev.map(item => item.recordId === failedItem.recordId ? { ...item, isRetrying: true } : item));
+      await supabase.from('evrak_islemleri').update({ status: 'İŞLENİYOR' }).eq('id', failedItem.recordId);
 
-    if (success) {
-      showToast(`${failedItem.fileName} başarıyla kuyruğa alındı!`, "success");
-      setFailedWebhooks(prev => prev.filter(item => item.recordId !== failedItem.recordId));
-    } else {
+      // 2. n8n'e doğru parametrelerle ve senkron şekilde isteği at
+      const result = await triggerWebhookSync(
+        failedItem.recordId,
+        failedItem.fileUrl,
+        failedItem.metrics || [],
+        failedItem.fileName
+      );
+
+      // 3. Başarılı ise başarısızlar listesinden çıkar
+      if (result && result.success) {
+        setFailedWebhooks(prev => prev.filter(item => item.recordId !== failedItem.recordId));
+      } else {
+        throw new Error('Senkron istek başarısız oldu.');
+      }
+    } catch (err) {
+      console.error('[Retry] Hata:', err);
+      // Hata durumunda statüyü geri HATA yap
       await supabase.from('evrak_islemleri').update({ status: 'HATA' }).eq('id', failedItem.recordId);
-      showToast(`${failedItem.fileName} gönderilemedi.`, "error");
+      showToast(`${failedItem.fileName || 'Evrak'} gönderilemedi.`, 'error');
+    } finally {
+      // 4. KESİN KURAL: Ne olursa olsun yükleniyor (animasyon) state'ini kapat
       setFailedWebhooks(prev => prev.map(item => item.recordId === failedItem.recordId ? { ...item, isRetrying: false } : item));
     }
   };
@@ -461,30 +575,34 @@ function Dashboard() {
       let successCount = 0;
       let newFailed = [];
 
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData?.user?.id) {
+        showToast('Oturum bilgisi bulunamadı, lütfen tekrar giriş yapın.', 'error');
+        return;
+      }
+      const currentUser = userData.user;
+
       for (let i = 0; i < selectedFiles.length; i++) {
         const currentFile = selectedFiles[i];
         const fileName = currentFile.name;
 
-        // 1. Upload to receipt_images bucket
-        const rawExt = currentFile.name.split('.').pop() || 'jpg';
-        const safeExt = rawExt.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const uniqueName = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}_${i}.${safeExt}`;
-        const filePath = `uploads/${uniqueName}`;
+        // 1. Upload to raporlar bucket
+        const filePath = `${currentUser.id}/${currentFile.name}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('receipt_images')
+          .from('raporlar')
           .upload(filePath, currentFile, { upsert: false });
 
         if (uploadError) throw new Error('Dosya yüklenemedi. Lütfen tekrar deneyin.');
 
-        // 2. Signed URL (1 saatlik — güvenli, public URL yerine)
+        // 2. Public URL
         const storedPath = uploadData?.path ?? filePath;
-        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-          .from('receipt_images')
-          .createSignedUrl(storedPath, 3600); // 1 saat geçerli
+        const { data: publicUrlData } = supabase.storage
+          .from('raporlar')
+          .getPublicUrl(storedPath);
 
-        const fileUrl = signedUrlData?.signedUrl;
-        if (!fileUrl || signedUrlError) throw new Error('Dosya URL’si alınamadı. Lütfen tekrar deneyin.');
+        const fileUrl = publicUrlData?.publicUrl;
+        if (!fileUrl) throw new Error('Dosya URL’si alınamadı. Lütfen tekrar deneyin.');
 
         // 3. Insert to evrak_islemleri
         const { data: insertData, error: insertError } = await supabase
@@ -643,18 +761,24 @@ function Dashboard() {
 
   // ─── Excel'e Toplu Gönderim (İkinci Aşama) ───
   const handleExportToExcel = async () => {
+    if (isExporting) return; // Mükerrer İstek Kilidi (Double-Click Prevention)
+
     const normalize = (s) => (s || '').trim().toUpperCase().replace(/İ/g, 'I').replace(/Ş/g, 'S').replace(/Ü/g, 'U').replace(/Ö/g, 'O');
     const completedItems = islemListesi.filter(item => normalize(item.status) === 'TAMAMLANDI');
 
     if (completedItems.length === 0) return;
 
     setIsExporting(true);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 saniye timeout (120000 ms)
+
     try {
       const exportData = completedItems.map(item => ({
         ...parseExtractedData(item)
       }));
 
-      const response = await fetch('https://n8n.akista.me/webhook/save-receipt', {
+      const response = await fetch('https://azimdeneme.app.n8n.cloud/webhook/save-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -664,9 +788,15 @@ function Dashboard() {
           dosyaIsmi: reportName,
           items: exportData
         }),
+        signal: controller.signal // AbortController sinyali
       });
 
+      clearTimeout(timeoutId); // Başarılı olursa timeout'ı temizle
+
       if (!response.ok) {
+        if (response.status === 504 || response.status === 502) {
+          throw new Error('TIMEOUT');
+        }
         throw new Error(`Sunucu Hatası: ${response.status}`);
       }
 
@@ -681,10 +811,18 @@ function Dashboard() {
       setReportName('');
 
     } catch (err) {
+      clearTimeout(timeoutId); // Hata durumunda da timeout'ı temizle
       console.error('[Export Excel] Hata:', err);
-      showToast('Excel aktarımında bir hata oluştu.', 'error');
+
+      if (err.name === 'AbortError' || err.message === 'TIMEOUT') {
+        showToast('İşlem çok uzun sürdü, Excel arka planda oluşturuluyor olabilir.', 'error');
+      } else if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+        showToast("Bağlantı Hatası: Lütfen internet bağlantınızı kontrol edin veya n8n akışının açık olduğundan emin olun.", "error");
+      } else {
+        showToast('Excel aktarımında bir hata oluştu.', 'error');
+      }
     } finally {
-      setIsExporting(false);
+      setIsExporting(false); // İşlem bitince kilidi aç
     }
   };
   return (
@@ -692,24 +830,36 @@ function Dashboard() {
       <div className="noise-overlay" />
 
       {/* Toast Notification */}
-      <div className={`fixed bottom - 6 right - 6 z - 50 transition - all duration - 300 transform ${toastMessage.visible ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0 pointer-events-none'} `}>
-        <div className={`px - 6 py - 4 rounded - xl border flex items - center gap - 3 shadow - xl ${toastMessage.type === 'error' ? 'bg-red-950/90 border-red-500/50 text-red-200 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'bg-green-950/90 border-green-500/50 text-green-200 shadow-[0_0_30px_rgba(34,197,94,0.2)]'} `}>
+      <div className={`fixed top-6 left-6 z-50 transition-all duration-300 transform ${toastMessage.visible ? 'translate-y-0 opacity-100' : '-translate-y-8 opacity-0 pointer-events-none'}`}>
+        <div className={`px-6 py-4 rounded-xl border flex items-center gap-3 shadow-xl ${toastMessage.type === 'error' ? 'bg-red-950/90 border-red-500/50 text-red-200 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'bg-green-950/90 border-green-500/50 text-green-200 shadow-[0_0_30px_rgba(34,197,94,0.2)]'}`}>
           {toastMessage.type === 'error' ? <ShieldCheck size={20} className="text-red-400" /> : <Check size={20} className="text-green-400" />}
           <span className="font-medium text-sm">{toastMessage.text}</span>
         </div>
       </div>
 
       {/* Sol Menü (Sidebar) */}
-      <aside className="w-64 bg-[#05050A]/80 backdrop-blur-xl border-r border-white/5 flex flex-col justify-between hidden md:flex relative z-20">
+      <aside className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-[#05050A]/80 backdrop-blur-xl border-r border-white/5 flex flex-col justify-between hidden md:flex relative z-20 transition-all duration-300 ease-in-out overflow-hidden`}>
         <div>
-          <div className="p-6 flex items-center gap-3 mb-8">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#7B61FF] to-indigo-600 flex items-center justify-center shadow-[0_0_15px_#7b61ff80]">
-              <span className="text-white text-xl font-bold leading-none">M</span>
+          {/* Logo + Toggle Butonu */}
+          <div className={`flex items-center mb-8 min-h-[72px] transition-all duration-300 ${isSidebarCollapsed ? 'flex-col gap-4 mt-6' : 'p-4 justify-between'}`}>
+            <div className={`flex items-center gap-3 overflow-hidden ${isSidebarCollapsed ? 'justify-center' : ''}`}>
+              <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-br from-[#7B61FF] to-indigo-600 flex items-center justify-center shadow-[0_0_15px_#7b61ff80]">
+                <span className="text-white text-xl font-bold leading-none">M</span>
+              </div>
+              <span className={`text-xl font-bold tracking-tight text-white transition-all duration-300 whitespace-nowrap ${isSidebarCollapsed ? 'opacity-0 w-0 h-0 hidden' : 'opacity-100'}`}>MUHASY</span>
             </div>
-            <span className="text-xl font-bold tracking-tight text-white">MUHASY</span>
+            <button
+              onClick={() => setIsSidebarCollapsed(prev => !prev)}
+              className={`shrink-0 p-1.5 rounded-xl bg-transparent text-gray-400 hover:text-white hover:bg-[#7B61FF]/20 transition-all duration-200 ${isSidebarCollapsed ? '' : ''}`}
+              title={isSidebarCollapsed ? 'Menüyü Genişlet' : 'Menüyü Daralt'}
+            >
+              {isSidebarCollapsed
+                ? <PanelLeftOpen size={18} />
+                : <PanelLeftClose size={18} />}
+            </button>
           </div>
 
-          <nav className="flex flex-col gap-2 px-4 text-gray-400 font-sans">
+          <nav className="flex flex-col gap-2 px-3 text-gray-400 font-sans">
             {[
               { id: 'panel', icon: LayoutDashboard, label: 'Panel' },
               { id: 'z-raporlari', icon: UploadCloud, label: 'Yeni Evrak Yükle' },
@@ -719,22 +869,27 @@ function Dashboard() {
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-[1.25rem] transition-all duration-300 w-full text-left group ${activeTab === item.id
+                title={isSidebarCollapsed ? item.label : ''}
+                className={`flex items-center gap-3 py-3 rounded-[1.25rem] transition-all duration-300 w-full text-left group ${activeTab === item.id
                   ? 'bg-[#7B61FF]/10 text-[#7B61FF] border border-[#7B61FF]/30 shadow-[0_0_15px_#7b61ff20]'
                   : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent hover:-translate-y-px'
-                  }`}
+                  } ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'}`}
               >
-                <item.icon size={20} className={activeTab === item.id ? '' : 'transition-transform group-hover:scale-110'} />
-                <span className={activeTab === item.id ? 'font-semibold' : 'font-medium'}>{item.label}</span>
+                <item.icon size={20} className={`shrink-0 ${activeTab === item.id ? '' : 'transition-transform group-hover:scale-110'}`} />
+                <span className={`whitespace-nowrap transition-all duration-300 ${isSidebarCollapsed ? 'opacity-0 w-0 hidden' : 'opacity-100'} ${activeTab === item.id ? 'font-semibold' : 'font-medium'}`}>{item.label}</span>
               </button>
             ))}
           </nav>
         </div>
 
-        <div className="p-4 mb-4">
-          <button onClick={async () => { await supabase.auth.signOut(); navigate('/login'); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-[1.25rem] text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-300 hover:-translate-y-px group">
-            <LogOut size={20} className="transition-transform group-hover:scale-110" />
-            <span className="font-medium font-sans">Çıkış Yap</span>
+        <div className="p-3 mb-4">
+          <button
+            onClick={async () => { await supabase.auth.signOut(); navigate('/login'); }}
+            title={isSidebarCollapsed ? 'Çıkış Yap' : ''}
+            className={`w-full flex items-center gap-3 py-3 rounded-[1.25rem] text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all duration-300 hover:-translate-y-px group ${isSidebarCollapsed ? 'justify-center px-0' : 'px-4'}`}
+          >
+            <LogOut size={20} className="shrink-0 transition-transform group-hover:scale-110" />
+            <span className={`font-medium font-sans whitespace-nowrap transition-all duration-300 ${isSidebarCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100'}`}>Çıkış Yap</span>
           </button>
         </div>
       </aside>
@@ -759,7 +914,7 @@ function Dashboard() {
                       <FileText size={20} className="text-[#7B61FF]" />
                     </div>
                   </div>
-                  <h3 className="text-4xl font-bold text-white font-data tracking-tight">1.245</h3>
+                  <h3 className="text-4xl font-bold text-white font-data tracking-tight">{dashboardStats.toplamEvrak.toLocaleString('tr-TR')}</h3>
                 </div>
 
                 <div className="bg-[#18181B]/80 border border-white/5 hover:border-cyan-500/30 transition-colors rounded-[2rem] p-6 group relative overflow-hidden backdrop-blur-md">
@@ -770,7 +925,7 @@ function Dashboard() {
                       <Clock size={20} className="text-cyan-400" />
                     </div>
                   </div>
-                  <h3 className="text-4xl font-bold text-white font-data tracking-tight">124<span className="text-xl text-gray-500 ml-1">Saat</span></h3>
+                  <h3 className="text-2xl sm:text-3xl font-bold text-white font-data tracking-tight">{dashboardStats.tasarrufZamani}</h3>
                 </div>
 
                 <div className="bg-[#18181B]/80 border border-white/5 hover:border-emerald-500/30 transition-colors rounded-[2rem] p-6 group relative overflow-hidden backdrop-blur-md">
@@ -781,7 +936,7 @@ function Dashboard() {
                       <ShieldCheck size={20} className="text-emerald-400" />
                     </div>
                   </div>
-                  <h3 className="text-4xl font-bold text-white font-data tracking-tight">%0.0</h3>
+                  <h3 className="text-4xl font-bold text-white font-data tracking-tight">-</h3>
                 </div>
               </div>
 
@@ -792,33 +947,40 @@ function Dashboard() {
                   Son Aktiviteler
                 </h3>
                 <div className="bg-[#18181B]/50 border border-white/5 rounded-[2rem] overflow-hidden p-4 text-sm backdrop-blur-sm">
-                  <div className="flex items-center gap-4 p-4 hover:bg-white-[0.02] rounded-xl transition-colors cursor-pointer border-b border-white/5">
-                    <div className="w-10 h-10 rounded-xl bg-[#7B61FF]/10 flex items-center justify-center shrink-0 border border-[#7B61FF]/20">
-                      <FileText size={18} className="text-[#7B61FF]" />
-                    </div>
-                    <div className="flex flex-col flex-1">
-                      <span className="font-medium text-white mb-1 font-sans">Mart_Giderleri.xlsx başarıyla oluşturuldu</span>
-                      <span className="text-xs text-gray-500 font-data">2 dakika önce</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 p-4 hover:bg-white-[0.02] rounded-xl transition-colors cursor-pointer border-b border-white/5">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/20">
-                      <ShieldCheck size={18} className="text-emerald-400" />
-                    </div>
-                    <div className="flex flex-col flex-1">
-                      <span className="font-medium text-white mb-1 font-sans">Sistem taraması hatasız tamamlandı</span>
-                      <span className="text-xs text-gray-500 font-data">3 saat önce</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 p-4 hover:bg-white-[0.02] rounded-xl transition-colors cursor-pointer">
-                    <div className="w-10 h-10 rounded-xl bg-[#7B61FF]/10 flex items-center justify-center shrink-0 border border-[#7B61FF]/20">
-                      <FileText size={18} className="text-[#7B61FF]" />
-                    </div>
-                    <div className="flex flex-col flex-1">
-                      <span className="font-medium text-white mb-1 font-sans">Subat_Faturalar.xlsx başarıyla oluşturuldu</span>
-                      <span className="text-xs text-gray-500 font-data">1 gün önce</span>
-                    </div>
-                  </div>
+                  {recentActivities.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 font-sans">Henüz aktivite bulunmuyor.</div>
+                  ) : (
+                    recentActivities.map((activity, idx) => {
+                      const dateObj = new Date(activity.created_at);
+
+                      // Calculate relative time (e.g., "5 dakika önce")
+                      const now = new Date();
+                      const diffInSeconds = Math.floor((now - dateObj) / 1000);
+
+                      let timeAgo = '';
+                      if (diffInSeconds < 60) {
+                        timeAgo = 'Az önce';
+                      } else if (diffInSeconds < 3600) {
+                        timeAgo = `${Math.floor(diffInSeconds / 60)} dakika önce`;
+                      } else if (diffInSeconds < 86400) {
+                        timeAgo = `${Math.floor(diffInSeconds / 3600)} saat önce`;
+                      } else {
+                        timeAgo = `${Math.floor(diffInSeconds / 86400)} gün önce`;
+                      }
+
+                      return (
+                        <div key={activity.id || idx} className={`flex items-center gap-4 p-4 hover:bg-white-[0.02] rounded-xl transition-colors cursor-pointer ${idx !== recentActivities.length - 1 ? 'border-b border-white/5' : ''}`}>
+                          <div className="w-10 h-10 rounded-xl bg-[#7B61FF]/10 flex items-center justify-center shrink-0 border border-[#7B61FF]/20">
+                            <FileText size={18} className="text-[#7B61FF]" />
+                          </div>
+                          <div className="flex flex-col flex-1">
+                            <span className="font-medium text-white mb-1 font-sans">{activity.name} Excel dosyası oluşturuldu</span>
+                            <span className="text-xs text-gray-500 font-data">{timeAgo}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>
@@ -1194,13 +1356,25 @@ function Dashboard() {
             <div className="flex-1 flex flex-col">
               <div className="flex items-center justify-between mb-6">
                 <h1 className="text-2xl font-bold text-white tracking-tight font-sans">Geçmiş Raporlar</h1>
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
-                  <input
-                    type="text"
-                    placeholder="Ara..."
-                    className="pl-11 pr-4 py-2.5 bg-[#0A0A14] border border-white/10 rounded-xl text-sm text-[#F0EFF4] focus:outline-none focus:border-[#7B61FF]/50 transition-colors w-64 shadow-inner font-sans"
-                  />
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                    <input
+                      type="text"
+                      placeholder="Ara..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-11 pr-4 py-2.5 bg-[#0A0A14] border border-white/10 rounded-xl text-sm text-[#F0EFF4] focus:outline-none focus:border-[#7B61FF]/50 transition-colors w-64 shadow-inner font-sans"
+                    />
+                  </div>
+                  <button
+                    onClick={fetchReports}
+                    disabled={loadingReports}
+                    className="flex items-center justify-center p-2.5 bg-[#0A0A14] hover:bg-white/[0.03] border border-white/10 hover:border-[#7B61FF]/40 rounded-xl text-gray-400 hover:text-[#7B61FF] transition-all shadow-inner group"
+                    title="Yenile"
+                  >
+                    <RefreshCcw size={18} className={`${loadingReports ? 'animate-spin text-[#7B61FF]' : 'group-hover:drop-shadow-[0_0_8px_rgba(123,97,255,0.8)]'}`} />
+                  </button>
                 </div>
               </div>
 
@@ -1232,8 +1406,14 @@ function Dashboard() {
                             Henüz geçmiş rapor bulunmuyor.
                           </td>
                         </tr>
+                      ) : filteredVeriler.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="px-6 py-16 text-center text-gray-500 font-medium tracking-wide">
+                            Aramanızla eşleşen rapor bulunamadı.
+                          </td>
+                        </tr>
                       ) : (
-                        reports.map((report, idx) => {
+                        filteredVeriler.map((report, idx) => {
                           const dateObj = report.created_at ? new Date(report.created_at) : null;
                           const formattedDate = dateObj
                             ? `${dateObj.getDate().toString().padStart(2, '0')}.${(dateObj.getMonth() + 1).toString().padStart(2, '0')}.${dateObj.getFullYear()} `
