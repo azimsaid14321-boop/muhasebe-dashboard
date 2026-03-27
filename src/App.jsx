@@ -1050,7 +1050,7 @@ function Dashboard() {
                 <div className="flex flex-col gap-5 lg:w-[65%]">
 
                   {/* Rapor/Dosya İsmi */}
-                  <div className="bg-[#18181B]/80 border border-white/5 backdrop-blur-md rounded-[2rem] p-5 shadow-xl shrink-0">
+                  <div className="sticky top-0 z-[50] bg-[#0A0A0A] md:bg-[#18181B]/80 border-b md:border border-white/10 md:border-white/5 md:backdrop-blur-md rounded-b-3xl md:rounded-[2rem] p-5 md:p-5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] md:shadow-xl shrink-0 -mx-4 md:mx-0 px-8 md:px-5">
                     <label className="text-[10px] font-bold text-[#7B61FF] block mb-2 tracking-widest font-data uppercase">Rapor / Dosya İsmi</label>
                     <input
                       ref={reportNameInputRef}
@@ -1064,23 +1064,42 @@ function Dashboard() {
 
                   {/* Drag & Drop Zone */}
                   <div
-                    className={`flex-1 relative rounded-[3rem] border-2 border-dashed flex items-center justify-center p-12 transition-all duration-300 min-h-[260px] ${dragActive ? 'border-[#7B61FF] bg-[#7B61FF]/10 shadow-[0_0_60px_rgba(123,97,255,0.25)]' : 'border-white/10 bg-[#18181B]/40 hover:border-[#7B61FF]/50 hover:bg-[#18181B]/80 backdrop-blur-sm'}`}
+                    className={`flex-1 relative rounded-[2rem] border-2 border-dashed flex items-center justify-center p-6 md:p-12 transition-all duration-300 ${selectedFiles.length > 0 ? 'min-h-[140px] max-h-[180px] bg-[#18181B]/80 border-[#7B61FF]/30' : 'min-h-[260px] bg-[#18181B]/40 border-white/10 hover:border-[#7B61FF]/50 hover:bg-[#18181B]/80 backdrop-blur-sm'} ${dragActive ? 'border-[#7B61FF] bg-[#7B61FF]/10 shadow-[0_0_60px_rgba(123,97,255,0.25)]' : ''}`}
                     onDragEnter={handleDrag}
                     onDragLeave={handleDrag}
                     onDragOver={handleDrag}
                     onDrop={handleDrop}
                   >
-                    <div className="relative z-10 flex flex-col items-center text-center max-w-md group">
-                      <div className="w-24 h-24 rounded-full bg-[#7B61FF]/10 border border-[#7B61FF]/30 flex items-center justify-center mb-6 shadow-[0_0_20px_#7B61FF30] group-hover:scale-110 group-hover:bg-[#7B61FF]/20 transition-all duration-500">
-                        <UploadCloud size={48} className="text-[#7B61FF]" />
-                      </div>
-                      <h3 className="text-3xl font-bold text-white mb-2 tracking-tight font-sans">
-                        {selectedFiles.length > 0 ? (selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} Dosya Seçildi`) : 'Sürükle & Bırak'}
-                      </h3>
+                    <div className="relative z-10 flex flex-col items-center text-center max-w-md group w-full">
+                      {selectedFiles.length === 0 && (
+                        <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-[#7B61FF]/10 border border-[#7B61FF]/30 flex items-center justify-center mb-4 md:mb-6 shadow-[0_0_20px_#7B61FF30] group-hover:scale-110 group-hover:bg-[#7B61FF]/20 transition-all duration-500">
+                          <UploadCloud size={40} className="text-[#7B61FF]" />
+                        </div>
+                      )}
+                      
                       {selectedFiles.length > 0 ? (
-                        <div className="text-gray-400 text-base mb-8 flex items-center gap-1.5 justify-center font-sans">
-                          <button onClick={(e) => { e.preventDefault(); setSelectedFiles([]); setReportName(''); }} className="text-[#7B61FF] hover:text-[#917bfd] font-medium transition-colors underline underline-offset-2 decoration-[#7B61FF]/40">
-                            Dosyaları Temizle / Yeniden Seç
+                        <div className="flex flex-col items-center w-full">
+                          <div className="flex items-center gap-3 mb-4 bg-emerald-500/10 border border-emerald-500/20 px-4 py-2 rounded-xl">
+                             <Check size={20} className="text-emerald-400" />
+                             <span className="font-bold text-white text-lg tracking-tight font-sans truncate max-w-[200px] md:max-w-xs">
+                               {selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} Dosya Seçildi`}
+                             </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 tracking-tight font-sans">
+                          Sürükle & Bırak
+                        </h3>
+                      )}
+                      
+                      {selectedFiles.length > 0 ? (
+                        <div className="text-gray-400 text-base mb-2 flex flex-col md:flex-row items-center gap-4 justify-center font-sans w-full">
+                          <label className="bg-[#7B61FF]/20 hover:bg-[#7B61FF]/30 text-[#7B61FF] px-6 py-3 min-h-[44px] rounded-xl font-bold cursor-pointer transition-colors flex justify-center w-full md:w-auto items-center gap-2 text-sm shadow-[0_0_15px_rgba(123,97,255,0.2)]">
+                            <Plus size={18} strokeWidth={3} /> Başka Dosya Ekle
+                            <input type="file" className="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,.zip" onChange={(e) => { if (e.target.files) handleFileSelect([...selectedFiles, ...Array.from(e.target.files)]); }} />
+                          </label>
+                          <button onClick={(e) => { e.preventDefault(); setSelectedFiles([]); setReportName(''); }} className="text-gray-500 hover:text-red-400 font-medium transition-colors text-xs underline underline-offset-4 decoration-transparent hover:decoration-red-400/30">
+                            Listeyi Temizle / Sıfırla
                           </button>
                         </div>
                       ) : (
@@ -1212,7 +1231,7 @@ function Dashboard() {
               </div>
               {/* ── İşlem Listesi (Yükleme Panelinin Altına Embed) ── */}
               {islemListesi.length > 0 && (
-                <div className="mt-10 w-full">
+                <div className="mt-20 md:mt-10 w-full relative z-30">
                   {/* Dekoratif ayraç */}
                   <div className="flex items-center gap-4 mb-6">
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -1373,17 +1392,17 @@ function Dashboard() {
                       const isBtnDisabled = completedCount === 0 || isExporting;
 
                       return (
-                        <div className="p-5 border-t border-white/5 bg-[#05050A]/40 flex justify-between items-center">
-                          <p className="text-gray-400 text-xs font-sans">
+                        <div className="p-6 border-t border-white/5 bg-[#05050A]/60 flex flex-col md:flex-row items-center justify-between gap-6 mt-6 md:mt-2">
+                          <p className="text-gray-400 text-xs font-sans text-center md:text-left leading-relaxed">
                             {completedCount > 0
-                              ? <span className="text-emerald-400 font-bold">{completedCount} evrak</span>
+                              ? <span className="text-emerald-400 font-bold text-[13px]">{completedCount} evrak</span>
                               : "Gönderime hazır evrak yok."}
                             {completedCount > 0 && " Excel'e aktarılmaya hazır."}
                           </p>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
                             <button
                               onClick={handleClearList}
-                              className="px-5 py-3.5 rounded-xl border border-white/10 hover:border-red-500/30 bg-transparent hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-sm font-bold flex items-center gap-2 transition-all duration-300 shadow-inner group font-sans"
+                              className="px-5 py-3.5 min-h-[44px] w-full md:w-auto justify-center rounded-xl border border-white/10 hover:border-red-500/30 bg-[#18181B] hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-sm font-bold flex items-center gap-2 transition-all duration-300 shadow-inner group font-sans"
                             >
                               <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
                               Listeyi Temizle
@@ -1391,7 +1410,7 @@ function Dashboard() {
                             <button
                               onClick={handleExportToExcel}
                               disabled={isBtnDisabled}
-                              className={`relative overflow-hidden group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
+                              className={`relative overflow-hidden w-full md:w-auto justify-center min-h-[44px] group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
                                 ? 'bg-[#18181B]/50 border border-white/5 text-gray-600 cursor-not-allowed'
                                 : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_25px_rgba(16,185,129,0.5)] hover:-translate-y-1'
                                 }`}
@@ -1600,10 +1619,10 @@ function Dashboard() {
                 <div className="w-full h-full flex flex-col md:flex-row overflow-hidden">
 
                   {/* ─── Sol %50: Dosya Önizleme ─── */}
-                  <div className="w-full h-2/5 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
+                  <div className="w-full h-[120px] shrink-0 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
 
                     {/* Üst Bar */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-[#05050A]/80 backdrop-blur-md z-10">
+                    <div className="flex items-center justify-between px-4 py-2 md:px-6 md:py-4 border-b border-white/5 bg-[#05050A]/80 backdrop-blur-md z-10">
                       <div className="flex items-center gap-3">
                         <Eye size={16} className="text-[#7B61FF]" />
                         <span className="text-white font-bold font-sans text-sm tracking-wide">Evrak #{uploadQueueIndex + 1} / {uploadQueue.length}</span>
@@ -1627,7 +1646,7 @@ function Dashboard() {
                     {/* Dosya Önizleme Alanı — Smart Magnifier */}
                     <div
                       ref={imgContainerRef}
-                      className="flex-1 flex justify-center items-center p-4 bg-gradient-radial from-[#18181B] to-[#0A0A14] relative overflow-hidden"
+                      className="flex-1 flex justify-center items-center p-2 md:p-4 bg-[#0A0A14] md:bg-gradient-radial md:from-[#18181B] md:to-[#0A0A14] relative overflow-hidden"
                       onMouseMove={(e) => {
                         if (!imgContainerRef.current) return;
                         const rect = imgContainerRef.current.getBoundingClientRect();
@@ -1660,13 +1679,13 @@ function Dashboard() {
                     </div>
 
                     {/* Dosya adı alt bar */}
-                    <div className="px-6 py-3 border-t border-white/5 bg-[#05050A]/60">
+                    <div className="hidden md:block px-6 py-3 border-t border-white/5 bg-[#05050A]/60">
                       <p className="text-[10px] font-data text-gray-500 uppercase tracking-widest truncate">{item.fileName}</p>
                     </div>
                   </div>
 
                   {/* ─── Sağ %50: Bekleme veya Form ─── */}
-                  <div className="w-full h-3/5 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[-30px_0_80px_rgba(0,0,0,0.8)] z-20">
+                  <div className="w-full flex-1 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)] md:shadow-[-30px_0_80px_rgba(0,0,0,0.8)] z-20">
 
                     {/* Üst Bar */}
                     <div className="flex items-center justify-between px-8 py-5 border-b border-white/5">
@@ -1833,17 +1852,17 @@ function Dashboard() {
                 <div className="w-full h-full flex flex-col md:flex-row overflow-hidden border-t md:border-none border-white/5 shadow-2xl">
 
                   {/* Sol Bölüm: Orijinal Fotoğraf */}
-                  <div className="w-full h-1/3 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
-                    <div className="flex items-center justify-between p-4 md:p-6 border-b border-white/5 bg-[#05050A]/80 absolute top-0 w-full z-10 backdrop-blur-md">
-                      <h3 className="text-white font-bold flex items-center gap-2.5 text-sm md:text-base font-sans tracking-wide"><Eye size={18} className="text-[#7B61FF]" /> Orijinal Evrak</h3>
+                  <div className="w-full h-[120px] shrink-0 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
+                    <div className="flex items-center justify-between p-3 md:p-6 border-b border-white/5 bg-[#05050A]/80 absolute top-0 w-full z-10 backdrop-blur-md">
+                      <h3 className="text-white font-bold flex items-center gap-2.5 text-[12px] md:text-base font-sans tracking-wide"><Eye size={16} className="text-[#7B61FF]" /> Orijinal Evrak</h3>
                       <button onClick={() => setSelectedModalItem(null)} className="md:hidden w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
                         <X size={18} />
                       </button>
                     </div>
-                    <div className="flex-1 relative w-full h-full flex flex-col items-center justify-center p-6 pt-24 md:pt-28 overflow-hidden min-h-0 min-w-0 rounded-2xl bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#18181B] to-[#0A0A14]">
-                      <div className="noise-overlay opacity-30 pointer-events-none" />
+                    <div className="flex-1 relative w-full h-full flex flex-col items-center justify-center p-2 pt-14 md:p-6 md:pt-28 overflow-hidden min-h-0 min-w-0 md:rounded-2xl bg-[#0A0A14] md:bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] md:from-[#18181B] md:to-[#0A0A14]">
+                      <div className="hidden md:block noise-overlay opacity-10 pointer-events-none" />
                       {selectedModalItem.file_url ? (
-                        <img src={selectedModalItem.file_url} className="block m-auto w-auto h-auto max-w-full max-h-full object-contain object-center transition-transform duration-300 ease-out hover:scale-[1.15] cursor-zoom-in relative z-10 drop-shadow-[0_0_40px_rgba(0,0,0,0.8)] rounded-xl" alt="Evrak" />
+                        <img src={selectedModalItem.file_url} className="block m-auto w-auto h-auto max-w-full max-h-full object-contain object-center transition-transform duration-300 ease-out hover:scale-[1.15] cursor-zoom-in relative z-10 md:drop-shadow-[0_0_20px_rgba(0,0,0,0.5)] rounded-lg md:rounded-xl" alt="Evrak" />
                       ) : (
                         <span className="text-gray-500 font-medium font-sans relative z-10">Görsel bulunamadı</span>
                       )}
@@ -1851,7 +1870,7 @@ function Dashboard() {
                   </div>
 
                   {/* Sağ Bölüm: Düzenleme Formu */}
-                  <div className="w-full h-2/3 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[-20px_0_50px_rgba(0,0,0,0.8)] z-20">
+                  <div className="w-full flex-1 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)] md:shadow-[-20px_0_50px_rgba(0,0,0,0.8)] z-20">
                     <div className="p-6 md:p-10 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
                       <div className="flex justify-between items-start mb-8 border-b border-white/5 pb-6">
                         <div>
