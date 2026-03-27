@@ -4,7 +4,7 @@ import {
   Clock, ShieldCheck, ChevronRight, Play, ChevronDown, PanelLeftClose, PanelLeftOpen,
   LayoutDashboard, FileText, History, DollarSign, Zap, Settings, LogOut, UploadCloud,
   Mail, Lock, ArrowLeft, Check, Plus, Sparkles, Trash2, Search, Download, Activity, ToggleLeft, ToggleRight, Loader2, ChevronRight as Next, RefreshCcw,
-  List, Eye, FileSignature, X
+  List, Eye, FileSignature, X, Menu, Upload
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { supabase } from './lib/supabaseClient';
@@ -49,6 +49,7 @@ function Dashboard() {
   const [loadingReports, setLoadingReports] = useState(false);
   const [dashboardStats, setDashboardStats] = useState({ toplamEvrak: 0, tasarrufZamani: '0 Dakika' });
   const [recentActivities, setRecentActivities] = useState([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'panel') {
@@ -555,7 +556,7 @@ function Dashboard() {
     }
 
     // ─── GÜvenlik: MIME type ve boyut kontrolü ───
-    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/zip', 'application/x-zip-compressed'];
     const MAX_SIZE_MB = 10;
     for (const file of selectedFiles) {
       if (!ALLOWED_TYPES.includes(file.type)) {
@@ -864,8 +865,14 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* ─── Mobil Overlay (Arkaplan Kilidi) ─── */}
+      <div 
+        className={`fixed inset-0 bg-[#05050A]/80 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setIsMobileMenuOpen(false)} 
+      />
+
       {/* Sol Menü (Sidebar) */}
-      <aside className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-[#05050A]/80 backdrop-blur-xl border-r border-white/5 flex flex-col justify-between hidden md:flex relative z-20 transition-all duration-300 ease-in-out overflow-hidden`}>
+      <aside className={`fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} ${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-[#05050A]/95 md:bg-[#05050A]/80 backdrop-blur-xl border-r border-white/5 flex flex-col justify-between h-full`}>
         <div>
           {/* Logo + Toggle Butonu */}
           <div className={`flex items-center mb-8 min-h-[72px] transition-all duration-300 ${isSidebarCollapsed ? 'flex-col gap-4 mt-6' : 'p-4 justify-between'}`}>
@@ -895,7 +902,7 @@ function Dashboard() {
             ].map(item => (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => { setActiveTab(item.id); setIsMobileMenuOpen(false); }}
                 title={isSidebarCollapsed ? item.label : ''}
                 className={`flex items-center gap-3 py-3 rounded-[1.25rem] transition-all duration-300 w-full text-left group ${activeTab === item.id
                   ? 'bg-[#7B61FF]/10 text-[#7B61FF] border border-[#7B61FF]/30 shadow-[0_0_15px_#7b61ff20]'
@@ -922,8 +929,24 @@ function Dashboard() {
       </aside>
 
       {/* Ana İçerik Alanı */}
-      <main className="flex-1 flex flex-col relative z-10 overflow-y-auto bg-transparent">
-        <div className="flex-1 p-8 flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 flex flex-col relative z-10 overflow-hidden bg-transparent">
+        {/* ─── Mobil Header ─── */}
+        <header className="md:hidden flex items-center justify-between p-4 border-b border-white/5 bg-[#05050A]/80 backdrop-blur-md shrink-0 z-20">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#7B61FF] to-indigo-600 flex items-center justify-center shadow-md">
+              <span className="text-white text-lg font-bold leading-none">M</span>
+            </div>
+            <span className="text-lg font-bold tracking-tight text-white">MUHASY</span>
+          </div>
+          <button 
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white transition-colors"
+          >
+            <Menu size={24} />
+          </button>
+        </header>
+
+        <div className="flex-1 p-4 md:p-8 flex flex-col lg:flex-row gap-8 max-w-7xl mx-auto w-full overflow-y-auto">
 
           {activeTab === 'panel' && (
             <div className="flex-1 flex flex-col gap-6">
@@ -1064,8 +1087,8 @@ function Dashboard() {
                         <div className="text-gray-400 text-base mb-8 flex items-center gap-1.5 justify-center font-sans">
                           <span>veya</span>
                           <label className="text-[#7B61FF] hover:text-[#917bfd] font-medium cursor-pointer transition-colors underline underline-offset-2 decoration-[#7B61FF]/40">
-                            Dosya Seç
-                            <input type="file" className="hidden" multiple accept=".jpg,.jpeg,.png,.pdf" onChange={(e) => handleFileSelect(e.target.files)} />
+                            Dosyaları Seç
+                            <input type="file" className="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,.zip" onChange={(e) => handleFileSelect(e.target.files)} />
                           </label>
                         </div>
                       )}
@@ -1136,11 +1159,11 @@ function Dashboard() {
                               value={field.name}
                               onChange={(e) => updateCustomFieldName(field.id, e.target.value)}
                               placeholder="Özel alan adı..."
-                              className={`bg-transparent border-none outline-none text-sm w-full flex-1 font-data tracking-wide ${field.active ? 'text-white' : 'text-gray-500'}`}
+                              className={`bg-transparent border-none outline-none text-base min-h-[44px] w-full flex-1 font-data tracking-wide ${field.active ? 'text-white' : 'text-gray-500'}`}
                               autoFocus
                             />
                           ) : (
-                            <span className={`text-sm font-medium flex-1 font-data tracking-wide ${field.active ? 'text-[#F0EFF4]' : 'text-gray-500'}`}>
+                            <span className={`text-base min-h-[44px] flex items-center font-medium flex-1 font-data tracking-wide ${field.active ? 'text-[#F0EFF4]' : 'text-gray-500'}`}>
                               {field.name}
                             </span>
                           )}
@@ -1157,7 +1180,7 @@ function Dashboard() {
                       <button
                         type="button"
                         onClick={addCustomField}
-                        className="w-full py-3 mt-1 border-2 border-dashed border-white/10 hover:border-[#7B61FF]/50 text-gray-500 hover:text-[#7B61FF] hover:bg-[#7B61FF]/5 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all duration-200 font-sans tracking-widest uppercase"
+                        className="w-full min-h-[48px] py-3 mt-1 border-2 border-dashed border-white/10 hover:border-[#7B61FF]/50 text-gray-500 hover:text-[#7B61FF] hover:bg-[#7B61FF]/5 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all duration-200 font-sans tracking-widest uppercase"
                       >
                         <Plus size={14} />
                         Özel Alan Ekle
@@ -1168,7 +1191,7 @@ function Dashboard() {
                     <button
                       onClick={handleAnalyze}
                       disabled={isProcessing || selectedFiles.length === 0}
-                      className={`relative overflow-hidden group w-full py-4 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 font-sans tracking-widest uppercase ${isProcessing || selectedFiles.length === 0
+                      className={`relative overflow-hidden group w-full min-h-[52px] py-4 rounded-2xl text-base font-bold transition-all duration-300 flex items-center justify-center gap-2 font-sans tracking-widest uppercase ${isProcessing || selectedFiles.length === 0
                         ? 'bg-[#18181B] border border-white/5 cursor-not-allowed text-gray-600 shadow-none'
                         : 'bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_4px_20px_rgba(168,85,247,0.45)] hover:scale-105 hover:shadow-[0_6px_30px_rgba(168,85,247,0.6)] ease-[cubic-bezier(0.25,0.46,0.45,0.94)]'
                         }`}
@@ -1214,8 +1237,8 @@ function Dashboard() {
                     </button>
                   </div>
 
-                  <div className="bg-[#18181B]/40 border border-white/5 rounded-[2rem] overflow-hidden backdrop-blur-md shadow-xl">
-                    <div className="p-5 space-y-3 max-h-[600px] overflow-y-auto custom-scrollbar">
+                  <div className="bg-[#18181B]/40 border border-white/5 rounded-[2rem] overflow-hidden backdrop-blur-md shadow-xl w-full">
+                    <div className="p-5 space-y-3 max-h-[600px] overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
                       {loadingIslem && islemListesi.length === 0 ? (
                         <div className="flex justify-center items-center py-16 text-gray-400">
                           <div className="flex flex-col items-center gap-3">
@@ -1241,96 +1264,98 @@ function Dashboard() {
 
                           return (
                             <div key={item.id}
-                              className={`group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[1.5rem] border transition-all duration-300 ${isPending
+                              className={`group overflow-x-auto custom-scrollbar rounded-[1.5rem] border transition-all duration-300 w-full ${isPending
                                 ? 'border-amber-500/20 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10 hover:shadow-[0_0_20px_rgba(251,191,36,0.1)]'
                                 : isDone
                                   ? 'border-emerald-500/10 bg-emerald-500/5 hover:border-emerald-500/25 hover:bg-emerald-500/10'
                                   : isError
                                     ? 'border-red-500/15 bg-red-500/5 hover:border-red-500/30'
                                     : 'border-white/5 bg-[#0A0A14]/80 hover:border-[#7B61FF]/25 hover:bg-[#0A0A14]/60'
-                                } hover:-translate-y-px`}
+                                }`}
                             >
-                              {/* Sol: Thumbnail + Meta */}
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden border border-white/8 shadow-md">
-                                  {item.file_url ? (
-                                    <img src={item.file_url} alt="Evrak" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-[#18181B]">
-                                      <FileText size={20} className="text-gray-600" />
-                                    </div>
-                                  )}
-                                  <div className={`absolute top-1 right-1 w-2 h-2 rounded-full border border-[#0A0A14] ${isPending ? 'bg-amber-400 animate-pulse shadow-[0_0_4px_rgba(251,191,36,0.9)]'
-                                    : isDone ? 'bg-emerald-400'
-                                      : isError ? 'bg-red-400'
-                                        : 'bg-[#7B61FF] animate-pulse'
-                                    }`} />
+                              <div className="flex items-center justify-between gap-4 p-4 min-w-[max-content] md:min-w-0 w-full">
+                                {/* Sol: Thumbnail + Meta (Sabit kolon için sticky class) */}
+                                <div className="flex items-center gap-3 min-w-0 shrink-0 sticky left-0 z-10 pl-2 bg-[#18181B]/90 md:bg-transparent backdrop-blur-sm rounded-r-xl">
+                                  <div className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden border border-white/8 shadow-md">
+                                    {item.file_url ? (
+                                      <img src={item.file_url} alt="Evrak" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center bg-[#18181B]">
+                                        <FileText size={20} className="text-gray-600" />
+                                      </div>
+                                    )}
+                                    <div className={`absolute top-1 right-1 w-2 h-2 rounded-full border border-[#0A0A14] ${isPending ? 'bg-amber-400 animate-pulse shadow-[0_0_4px_rgba(251,191,36,0.9)]'
+                                      : isDone ? 'bg-emerald-400'
+                                        : isError ? 'bg-red-400'
+                                          : 'bg-[#7B61FF] animate-pulse'
+                                      }`} />
+                                  </div>
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="font-bold text-[#F0EFF4] truncate max-w-[160px] sm:max-w-xs font-sans tracking-tight text-sm">
+                                      {item.file_name || 'İsimsiz Evrak'}
+                                    </span>
+                                    <span className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1 font-data uppercase tracking-wider">
+                                      <Clock size={8} />
+                                      {new Date(item.created_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                    {Array.isArray(item.fields) && item.fields.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {item.fields.slice(0, 3).map((f, fi) => (
+                                          <span key={fi} className="text-[8px] font-data px-1.5 py-0.5 bg-white/5 text-gray-600 rounded border border-white/5">{f}</span>
+                                        ))}
+                                        {item.fields.length > 3 && (
+                                          <span className="text-[8px] font-data px-1 text-gray-700">+{item.fields.length - 3}</span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex flex-col min-w-0">
-                                  <span className="font-bold text-[#F0EFF4] truncate max-w-[160px] sm:max-w-xs font-sans tracking-tight text-sm">
-                                    {item.file_name || 'İsimsiz Evrak'}
-                                  </span>
-                                  <span className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1 font-data uppercase tracking-wider">
-                                    <Clock size={8} />
-                                    {new Date(item.created_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                  </span>
-                                  {Array.isArray(item.fields) && item.fields.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {item.fields.slice(0, 3).map((f, fi) => (
-                                        <span key={fi} className="text-[8px] font-data px-1.5 py-0.5 bg-white/5 text-gray-600 rounded border border-white/5">{f}</span>
-                                      ))}
-                                      {item.fields.length > 3 && (
-                                        <span className="text-[8px] font-data px-1 text-gray-700">+{item.fields.length - 3}</span>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
 
-                              {/* Sağ: Durum + Buton */}
-                              <div className="flex items-center gap-3 justify-between sm:justify-end shrink-0">
-                                <div>
+                                {/* Sağ: Durum + Buton (Sağa kaydırılabilir alan içinde) */}
+                                <div className="flex items-center gap-3 justify-end shrink-0 pr-2">
+                                  <div>
+                                    {isPending ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-lg text-[10px] font-bold tracking-widest border border-amber-500/25 uppercase font-data">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Onay Bekliyor
+                                      </span>
+                                    ) : isDone ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-bold tracking-widest border border-emerald-500/20 uppercase font-data">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Tamamlandı
+                                      </span>
+                                    ) : isError ? (
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 text-red-400 rounded-lg text-[10px] font-bold tracking-widest border border-red-500/20 uppercase font-data">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Başarısız
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#7B61FF]/10 text-[#7B61FF] rounded-lg text-[10px] font-bold tracking-widest border border-[#7B61FF]/20 uppercase font-data">
+                                        <Loader2 size={9} className="animate-spin" /> Okunuyor
+                                      </span>
+                                    )}
+                                  </div>
+
                                   {isPending ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-lg text-[10px] font-bold tracking-widest border border-amber-500/25 uppercase font-data">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Onay Bekliyor
-                                    </span>
+                                    <button
+                                      onClick={() => openReviewModal(item)}
+                                      className="relative overflow-hidden group/btn px-6 py-3 md:px-4 md:py-2 min-h-[44px] bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[13px] md:text-[11px] font-bold rounded-xl flex items-center gap-1.5 shadow-[0_2px_12px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_20px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-300 whitespace-nowrap font-sans tracking-wide"
+                                    >
+                                      <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-[#7B61FF] -translate-x-full group-hover/btn:translate-x-0 transition-transform duration-400 z-0" />
+                                      <span className="relative z-10 flex items-center gap-1.5">
+                                        <Eye size={13} /> İncele &amp; Onayla
+                                      </span>
+                                    </button>
                                   ) : isDone ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-bold tracking-widest border border-emerald-500/20 uppercase font-data">
-                                      <Check size={9} strokeWidth={3} /> Tamamlandı
-                                    </span>
-                                  ) : isError ? (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 text-red-400 rounded-lg text-[10px] font-bold tracking-widest border border-red-500/20 uppercase font-data">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Başarısız
-                                    </span>
+                                    <button
+                                      onClick={() => openReviewModal(item)}
+                                      className="px-6 py-3 md:px-3 md:py-2 min-h-[44px] bg-[#18181B] border border-white/8 text-gray-500 hover:text-white hover:border-white/20 text-[13px] md:text-[11px] font-bold rounded-xl flex items-center gap-1.5 transition-colors whitespace-nowrap font-sans"
+                                    >
+                                      <Eye size={13} /> Görüntüle
+                                    </button>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#7B61FF]/10 text-[#7B61FF] rounded-lg text-[10px] font-bold tracking-widest border border-[#7B61FF]/20 uppercase font-data">
-                                      <Loader2 size={9} className="animate-spin" /> Okunuyor
-                                    </span>
+                                    <button disabled className="px-5 py-3 bg-[#18181B] border border-white/5 text-gray-700 text-[12px] font-bold rounded-xl cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap font-sans min-h-[44px]">
+                                      <Loader2 size={13} className="animate-spin" /> Bekleniyor
+                                    </button>
                                   )}
                                 </div>
-
-                                {isPending ? (
-                                  <button
-                                    onClick={() => openReviewModal(item)}
-                                    className="relative overflow-hidden group/btn px-4 py-2 bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[11px] font-bold rounded-lg flex items-center gap-1.5 shadow-[0_2px_12px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_20px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-300 whitespace-nowrap font-sans tracking-wide"
-                                  >
-                                    <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-[#7B61FF] -translate-x-full group-hover/btn:translate-x-0 transition-transform duration-400 z-0" />
-                                    <span className="relative z-10 flex items-center gap-1.5">
-                                      <Eye size={13} /> İncele &amp; Onayla
-                                    </span>
-                                  </button>
-                                ) : isDone ? (
-                                  <button
-                                    onClick={() => openReviewModal(item)}
-                                    className="px-3 py-2 bg-[#18181B] border border-white/8 text-gray-500 hover:text-white hover:border-white/20 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap font-sans"
-                                  >
-                                    <Eye size={13} /> Görüntüle
-                                  </button>
-                                ) : (
-                                  <button disabled className="px-3 py-2 bg-[#18181B] border border-white/5 text-gray-700 text-[11px] font-bold rounded-lg cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap font-sans">
-                                    <Loader2 size={13} className="animate-spin" /> Bekleniyor
-                                  </button>
-                                )}
                               </div>
                             </div>
                           );
@@ -1400,13 +1425,13 @@ function Dashboard() {
                       placeholder="Ara..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-11 pr-4 py-2.5 bg-[#0A0A14] border border-white/10 rounded-xl text-sm text-[#F0EFF4] focus:outline-none focus:border-[#7B61FF]/50 transition-colors w-64 shadow-inner font-sans"
+                      className="pl-11 pr-4 py-2.5 min-h-[44px] bg-[#0A0A14] border border-white/10 rounded-xl text-sm text-[#F0EFF4] focus:outline-none focus:border-[#7B61FF]/50 transition-colors w-64 shadow-inner font-sans"
                     />
                   </div>
                   <button
                     onClick={fetchReports}
                     disabled={loadingReports}
-                    className="flex items-center justify-center p-2.5 bg-[#0A0A14] hover:bg-white/[0.03] border border-white/10 hover:border-[#7B61FF]/40 rounded-xl text-gray-400 hover:text-[#7B61FF] transition-all shadow-inner group"
+                    className="flex items-center justify-center p-2.5 min-h-[44px] min-w-[44px] bg-[#0A0A14] hover:bg-white/[0.03] border border-white/10 hover:border-[#7B61FF]/40 rounded-xl text-gray-400 hover:text-[#7B61FF] transition-all shadow-inner group"
                     title="Yenile"
                   >
                     <RefreshCcw size={18} className={`${loadingReports ? 'animate-spin text-[#7B61FF]' : 'group-hover:drop-shadow-[0_0_8px_rgba(123,97,255,0.8)]'}`} />
@@ -1762,12 +1787,12 @@ function Dashboard() {
                             {Object.entries(uploadModalFormData).map(([key, value]) => (
                               <div key={key}>
                                 <label className="text-[10px] font-bold text-[#7B61FF] mb-1.5 block uppercase tracking-widest font-data">{key}</label>
-                                <input
-                                  type="text"
-                                  value={value ?? ''}
-                                  onChange={e => setUploadModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                                  className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-4 py-3 text-[#F0EFF4] font-data text-sm focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
-                                />
+                                  <input
+                                    type="text"
+                                    value={value ?? ''}
+                                    onChange={e => setUploadModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
+                                    className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-4 py-3 min-h-[44px] text-[#F0EFF4] font-data text-sm focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
+                                  />
                               </div>
                             ))}
                           </div>
@@ -1854,12 +1879,12 @@ function Dashboard() {
                           Object.entries(modalFormData).map(([key, value]) => (
                             <div key={key}>
                               <label className="text-[10px] font-bold text-[#7B61FF] mb-2 block uppercase tracking-widest pl-1 font-data">{key}</label>
-                              <input
-                                type="text"
-                                value={value ?? ''}
-                                onChange={(e) => setModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                                className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
-                              />
+                                <input
+                                  type="text"
+                                  value={value ?? ''}
+                                  onChange={(e) => setModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
+                                  className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 min-h-[44px] text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
+                                />
                             </div>
                           ))
                         ) : (
@@ -1867,12 +1892,12 @@ function Dashboard() {
                           extractionFields.filter(f => f.active && f.name).map(f => (
                             <div key={f.id}>
                               <label className="text-[10px] font-bold text-[#7B61FF] mb-2 block uppercase tracking-widest pl-1 font-data">{f.name}</label>
-                              <input
-                                type="text"
-                                value={modalFormData[f.name] ?? ''}
-                                onChange={(e) => setModalFormData(prev => ({ ...prev, [f.name]: e.target.value }))}
-                                className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
-                              />
+                                <input
+                                  type="text"
+                                  value={modalFormData[f.name] ?? ''}
+                                  onChange={(e) => setModalFormData(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                  className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 min-h-[44px] text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
+                                />
                             </div>
                           ))
                         )}
@@ -1899,6 +1924,21 @@ function Dashboard() {
             )}
         </div>
       </main>
+
+      {/* ─── Yükleme Durumu İzleyici (Sadece Mobilde) [UP-02] ─── */}
+      {isProcessing && (
+        <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-[#05050A]/95 border-t border-white/10 backdrop-blur-xl z-[100] flex items-center gap-4 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
+          <div className="w-10 h-10 rounded-full bg-[#7B61FF]/20 flex items-center justify-center shrink-0 border border-[#7B61FF]/40">
+            <Loader2 size={24} className="text-[#7B61FF] animate-spin" />
+          </div>
+          <div className="flex-1">
+            <p className="text-white font-bold text-sm tracking-wide font-sans mb-1">Evrak(lar) Yüklenip Analiz Ediliyor...</p>
+            <div className="w-full bg-white/10 h-1.5 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 rounded-full animate-[progress_2s_ease-in-out_infinite]" style={{ width: '70%' }} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
