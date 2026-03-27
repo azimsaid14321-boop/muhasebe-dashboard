@@ -1086,34 +1086,7 @@ function Dashboard() {
                     </label>
                   </div>
 
-                  {/* Seçili Dosya Listesi — Dropzone'un Altında, Temiz Akış */}
-                  {selectedFiles.length > 0 && (
-                    <div className="flex flex-col gap-2 p-4 bg-[#18181B]/80 border border-white/5 rounded-[1.5rem] backdrop-blur-md shadow-lg">
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
-                          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest font-data">{selectedFiles.length} Dosya Seçildi</span>
-                        </div>
-                        <button
-                          onClick={(e) => { e.preventDefault(); setSelectedFiles([]); setReportName(''); }}
-                          className="text-[10px] text-gray-600 hover:text-red-400 font-medium transition-colors font-data uppercase tracking-widest"
-                        >
-                          Temizle
-                        </button>
-                      </div>
-                      {selectedFiles.map((f, i) => (
-                        <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[#0A0A14]/60 border border-white/5">
-                          <FileText size={14} className="text-[#7B61FF] shrink-0" />
-                          <span className="text-xs text-[#F0EFF4] font-data truncate flex-1">{f.name}</span>
-                          <span className="text-[10px] text-gray-600 font-data shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
-                        </div>
-                      ))}
-                      <label className="mt-1 w-full min-h-[40px] border border-dashed border-[#7B61FF]/30 hover:border-[#7B61FF]/60 text-[#7B61FF] hover:bg-[#7B61FF]/5 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer font-sans">
-                        <Plus size={14} strokeWidth={3} /> Başka Dosya Ekle
-                        <input type="file" className="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,.zip" onChange={(e) => { if (e.target.files) handleFileSelect([...selectedFiles, ...Array.from(e.target.files)]); }} />
-                      </label>
-                    </div>
-                  )}
+
 
                   {/* Hata Alan Webhook'lar */}
                   {failedWebhooks.length > 0 && (
@@ -1204,23 +1177,43 @@ function Dashboard() {
                       </button>
                     </div>
 
-                    {/* ── Onay Bekleyen Evrak Kartları (Analizi Başlat üstünde) ── */}
-                    {uploadQueue.filter(q => {
-                      const norm = (q.status || '').trim().toUpperCase().replace(/İ/g,'I').replace(/Ş/g,'S');
-                      return norm.includes('ONAY') && norm.includes('BEKL');
-                    }).length > 0 && (
-                      <div className="flex flex-col gap-2 mb-3">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.8)]" />
-                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest font-data">Onay Bekleyen Evraklar</span>
+
+                    {/* ── Mevcut Seçim ve İşleme Listesi (Sağ Panel) ── */}
+                    {(selectedFiles.length > 0 || uploadQueue.length > 0) && (
+                      <div className="flex flex-col gap-2 mb-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#7B61FF] animate-pulse shadow-[0_0_6px_rgba(123,97,255,0.8)]" />
+                            <span className="text-[10px] font-bold text-[#7B61FF] uppercase tracking-widest font-data">İşlemdeki Evraklar</span>
+                          </div>
                         </div>
-                        {uploadQueue.filter(q => {
-                          const norm = (q.status || '').trim().toUpperCase().replace(/İ/g,'I').replace(/Ş/g,'S');
-                          return norm.includes('ONAY') && norm.includes('BEKL');
-                        }).map(q => {
+
+                        {/* Henüz analize girmemiş seçili dosyalar */}
+                        {!isProcessing && selectedFiles.map((f, i) => (
+                          <div key={`sel-${i}`} className="flex items-center justify-between gap-3 p-3 rounded-[1.25rem] border border-white/10 bg-[#0A0A14]/40">
+                             <div className="flex items-center gap-2 min-w-0">
+                               <FileText size={14} className="text-gray-600 shrink-0" />
+                               <span className="text-[11px] font-medium text-gray-400 truncate font-sans">{f.name}</span>
+                             </div>
+                             <span className="text-[9px] font-bold text-[#7B61FF]/60 uppercase tracking-widest font-data">BEKLİYOR</span>
+                          </div>
+                        ))}
+
+                        {/* Analiz kuyruğundaki evraklar */}
+                        {uploadQueue.map((q) => {
                           const listItem = islemListesi.find(it => it.id === q.recordId);
+                          const rawStatus = (q.status || '').trim();
+                          const norm = rawStatus.toUpperCase().replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ü/g,'U').replace(/Ö/g,'O');
+                          const isPending = norm.includes('ONAY') && norm.includes('BEKL');
+                          const isDone = norm === 'TAMAMLANDI';
+                          const isError = norm === 'HATA';
+
                           return (
-                            <div key={q.recordId} className="flex items-center justify-between gap-3 p-3 rounded-[1.25rem] border border-amber-500/20 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10 transition-all duration-200">
+                            <div key={q.recordId} className={`flex items-center justify-between gap-3 p-3 rounded-[1.25rem] border transition-all duration-200 ${isPending 
+                              ? 'border-amber-500/20 bg-amber-500/5 shadow-[0_0_10px_rgba(251,191,36,0.05)]' 
+                              : isDone ? 'border-emerald-500/10 bg-emerald-500/5' 
+                              : isError ? 'border-red-500/15 bg-red-500/5'
+                              : 'border-white/5 bg-[#0A0A14]/40'}`}>
                               <div className="flex items-center gap-2 min-w-0">
                                 <div className="relative w-9 h-9 shrink-0 rounded-lg overflow-hidden border border-white/10">
                                   {q.fileUrl ? (
@@ -1231,22 +1224,32 @@ function Dashboard() {
                                     </div>
                                   )}
                                 </div>
-                                <span className="text-xs font-bold text-[#F0EFF4] truncate max-w-[90px] font-sans">{q.fileName}</span>
+                                <span className="text-[11px] font-bold text-[#F0EFF4] truncate font-sans">{q.fileName}</span>
                               </div>
-                              <button
-                                onClick={() => listItem ? openReviewModal(listItem) : null}
-                                className="relative overflow-hidden group/btn shrink-0 px-3 py-1.5 min-h-[32px] bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-[0_2px_10px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_16px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-200 whitespace-nowrap font-sans"
-                              >
-                                <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-[#7B61FF] -translate-x-full group-hover/btn:translate-x-0 transition-transform duration-300 z-0" />
-                                <span className="relative z-10 flex items-center gap-1">
-                                  <Eye size={11} /> İncele & Onayla
-                                </span>
-                              </button>
+
+                              <div className="flex items-center gap-2">
+                                {isPending ? (
+                                  <button
+                                    onClick={() => listItem ? openReviewModal(listItem) : null}
+                                    className="relative overflow-hidden group/btn shrink-0 px-3 py-1.5 min-h-[32px] bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-[0_2px_10px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_16px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-200 whitespace-nowrap font-sans"
+                                  >
+                                    <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-[#7B61FF] -translate-x-full group-hover/btn:translate-x-0 transition-transform duration-300 z-0" />
+                                    <span className="relative z-10 flex items-center gap-1">
+                                      <Eye size={11} /> Onayla
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <span className={`text-[9px] font-bold uppercase tracking-widest font-data ${isDone ? 'text-emerald-400' : isError ? 'text-red-400' : 'text-[#7B61FF]'}`}>
+                                    {isDone ? 'BİTTİ' : isError ? 'HATA' : <Loader2 size={10} className="animate-spin" />}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           );
                         })}
                       </div>
                     )}
+
 
                     {/* ── Analizi Başlat Butonu ── */}
                     <button
@@ -1271,205 +1274,7 @@ function Dashboard() {
                 {/* İşlem Listesi kapanış etiketi — aşağıda devam ediyor */}
 
               </div>
-              {/* ── İşlem Listesi (Yükleme Panelinin Altına Embed) ── */}
-              {islemListesi.length > 0 && (
-                <div className="mt-20 md:mt-10 w-full relative z-30">
-                  {/* Dekoratif ayraç */}
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                    <div className="flex items-center gap-2 px-4 py-1.5 bg-[#7B61FF]/10 border border-[#7B61FF]/20 rounded-full">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#7B61FF] animate-pulse shadow-[0_0_6px_rgba(123,97,255,0.8)]" />
-                      <span className="text-[10px] font-bold text-[#7B61FF] uppercase tracking-widest font-data">Canlı İşlem Akışı</span>
-                    </div>
-                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                  </div>
 
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-lg font-bold text-white font-sans tracking-tight">İşlem Listesi</h2>
-                      <p className="text-gray-500 text-xs font-sans mt-0.5">Yüklenen evrakların AI analiz durumu — Realtime güncellenir.</p>
-                    </div>
-                    <button
-                      onClick={fetchIslemListesi}
-                      title="Listeyi yenile"
-                      className="w-9 h-9 bg-[#18181B] border border-white/5 hover:bg-white/5 text-[#7B61FF] rounded-xl flex items-center justify-center transition-colors shadow-inner"
-                    >
-                      <Activity size={16} className={loadingIslem ? 'animate-spin' : ''} />
-                    </button>
-                  </div>
-
-                  <div className="bg-[#18181B]/40 border border-white/5 rounded-[2rem] overflow-hidden backdrop-blur-md shadow-xl w-full">
-                    <div className="p-5 space-y-3 max-h-[600px] overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
-                      {loadingIslem && islemListesi.length === 0 ? (
-                        <div className="flex justify-center items-center py-16 text-gray-400">
-                          <div className="flex flex-col items-center gap-3">
-                            <Loader2 size={28} className="animate-spin text-[#7B61FF]" />
-                            <span className="text-sm font-medium font-sans">İşlemler Yükleniyor...</span>
-                          </div>
-                        </div>
-                      ) : islemListesi.length === 0 ? (
-                        <div className="text-center py-16 text-gray-600 font-medium font-sans">
-                          <List size={36} className="mx-auto mb-3 text-gray-700" />
-                          <p className="text-sm">Henüz bir işlem bulunmuyor.</p>
-                          <p className="text-xs text-gray-700 mt-1">Yukarıdan dosya yükle ve Analizi Başlat butonuna bas.</p>
-                        </div>
-                      ) : (
-                        islemListesi.map(item => {
-                          const rawStatus = (item.status || '').trim();
-                          const norm = rawStatus.toUpperCase()
-                            .replace(/İ/g, 'I').replace(/Ş/g, 'S')
-                            .replace(/Ü/g, 'U').replace(/Ö/g, 'O');
-                          const isPending = norm.includes('ONAY') && norm.includes('BEKL');
-                          const isDone = norm === 'TAMAMLANDI';
-                          const isError = norm === 'HATA';
-
-                          return (
-                            <div key={item.id}
-                              className={`group overflow-x-auto custom-scrollbar rounded-[1.5rem] border transition-all duration-300 w-full ${isPending
-                                ? 'border-amber-500/20 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10 hover:shadow-[0_0_20px_rgba(251,191,36,0.1)]'
-                                : isDone
-                                  ? 'border-emerald-500/10 bg-emerald-500/5 hover:border-emerald-500/25 hover:bg-emerald-500/10'
-                                  : isError
-                                    ? 'border-red-500/15 bg-red-500/5 hover:border-red-500/30'
-                                    : 'border-white/5 bg-[#0A0A14]/80 hover:border-[#7B61FF]/25 hover:bg-[#0A0A14]/60'
-                                }`}
-                            >
-                              <div className="flex items-center justify-between gap-4 p-4 min-w-[max-content] md:min-w-0 w-full">
-                                {/* Sol: Thumbnail + Meta (Sabit kolon için sticky class) */}
-                                <div className="flex items-center gap-3 min-w-0 shrink-0 sticky left-0 z-10 pl-2 bg-[#18181B]/90 md:bg-transparent backdrop-blur-sm rounded-r-xl">
-                                  <div className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden border border-white/8 shadow-md">
-                                    {item.file_url ? (
-                                      <img src={item.file_url} alt="Evrak" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center bg-[#18181B]">
-                                        <FileText size={20} className="text-gray-600" />
-                                      </div>
-                                    )}
-                                    <div className={`absolute top-1 right-1 w-2 h-2 rounded-full border border-[#0A0A14] ${isPending ? 'bg-amber-400 animate-pulse shadow-[0_0_4px_rgba(251,191,36,0.9)]'
-                                      : isDone ? 'bg-emerald-400'
-                                        : isError ? 'bg-red-400'
-                                          : 'bg-[#7B61FF] animate-pulse'
-                                      }`} />
-                                  </div>
-                                  <div className="flex flex-col min-w-0">
-                                    <span className="font-bold text-[#F0EFF4] truncate max-w-[160px] sm:max-w-xs font-sans tracking-tight text-sm">
-                                      {item.file_name || 'İsimsiz Evrak'}
-                                    </span>
-                                    <span className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1 font-data uppercase tracking-wider">
-                                      <Clock size={8} />
-                                      {new Date(item.created_at).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                    {Array.isArray(item.fields) && item.fields.length > 0 && (
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {item.fields.slice(0, 3).map((f, fi) => (
-                                          <span key={fi} className="text-[8px] font-data px-1.5 py-0.5 bg-white/5 text-gray-600 rounded border border-white/5">{f}</span>
-                                        ))}
-                                        {item.fields.length > 3 && (
-                                          <span className="text-[8px] font-data px-1 text-gray-700">+{item.fields.length - 3}</span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Sağ: Durum + Buton (Sağa kaydırılabilir alan içinde) */}
-                                <div className="flex items-center gap-3 justify-end shrink-0 pr-2">
-                                  <div>
-                                    {isPending ? (
-                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-lg text-[10px] font-bold tracking-widest border border-amber-500/25 uppercase font-data">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Onay Bekliyor
-                                      </span>
-                                    ) : isDone ? (
-                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[10px] font-bold tracking-widest border border-emerald-500/20 uppercase font-data">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Tamamlandı
-                                      </span>
-                                    ) : isError ? (
-                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 text-red-400 rounded-lg text-[10px] font-bold tracking-widest border border-red-500/20 uppercase font-data">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> Başarısız
-                                      </span>
-                                    ) : (
-                                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#7B61FF]/10 text-[#7B61FF] rounded-lg text-[10px] font-bold tracking-widest border border-[#7B61FF]/20 uppercase font-data">
-                                        <Loader2 size={9} className="animate-spin" /> Okunuyor
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {isPending ? (
-                                    <button
-                                      onClick={() => openReviewModal(item)}
-                                      className="relative overflow-hidden group/btn px-6 py-3 md:px-4 md:py-2 min-h-[44px] bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[13px] md:text-[11px] font-bold rounded-xl flex items-center gap-1.5 shadow-[0_2px_12px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_20px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-300 whitespace-nowrap font-sans tracking-wide"
-                                    >
-                                      <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-[#7B61FF] -translate-x-full group-hover/btn:translate-x-0 transition-transform duration-400 z-0" />
-                                      <span className="relative z-10 flex items-center gap-1.5">
-                                        <Eye size={13} /> İncele &amp; Onayla
-                                      </span>
-                                    </button>
-                                  ) : isDone ? (
-                                    <button
-                                      onClick={() => openReviewModal(item)}
-                                      className="px-6 py-3 md:px-3 md:py-2 min-h-[44px] bg-[#18181B] border border-white/8 text-gray-500 hover:text-white hover:border-white/20 text-[13px] md:text-[11px] font-bold rounded-xl flex items-center gap-1.5 transition-colors whitespace-nowrap font-sans"
-                                    >
-                                      <Eye size={13} /> Görüntüle
-                                    </button>
-                                  ) : (
-                                    <button disabled className="px-5 py-3 bg-[#18181B] border border-white/5 text-gray-700 text-[12px] font-bold rounded-xl cursor-not-allowed flex items-center gap-1.5 whitespace-nowrap font-sans min-h-[44px]">
-                                      <Loader2 size={13} className="animate-spin" /> Bekleniyor
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-
-                    {/* ─── Excel'e Aktar Butonu ─── */}
-                    {islemListesi.length > 0 && (() => {
-                      const completedCount = islemListesi.filter(i => {
-                        const n = (i.status || '').trim().toUpperCase().replace(/İ/g, 'I').replace(/Ş/g, 'S').replace(/Ü/g, 'U').replace(/Ö/g, 'O');
-                        return n === 'TAMAMLANDI';
-                      }).length;
-
-                      const isBtnDisabled = completedCount === 0 || isExporting;
-
-                      return (
-                        <div className="p-6 border-t border-white/5 bg-[#05050A]/60 flex flex-col md:flex-row items-center justify-between gap-6 mt-6 md:mt-2">
-                          {completedCount > 0 && (
-                            <p className="text-gray-400 text-xs font-sans text-center md:text-left leading-relaxed">
-                              <span className="text-emerald-400 font-bold text-[13px]">{completedCount} evrak</span>{" Excel'e aktarılmaya hazır."}
-                            </p>
-                          )}
-                          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
-                            <button
-                              onClick={handleClearList}
-                              className="px-5 py-3.5 min-h-[44px] w-full md:w-auto justify-center rounded-xl border border-white/10 hover:border-red-500/30 bg-[#18181B] hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-sm font-bold flex items-center gap-2 transition-all duration-300 shadow-inner group font-sans"
-                            >
-                              <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
-                              Listeyi Temizle
-                            </button>
-                            <button
-                              onClick={handleExportToExcel}
-                              disabled={isBtnDisabled}
-                              className={`relative overflow-hidden w-full md:w-auto justify-center min-h-[44px] group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
-                                ? 'bg-[#18181B]/50 border border-white/5 text-gray-600 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_25px_rgba(16,185,129,0.5)] hover:-translate-y-1'
-                                }`}
-                            >
-                              {!isBtnDisabled && <span className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-600 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 z-0" />}
-                              <span className="relative z-10 flex items-center gap-2">
-                                {isExporting ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
-                                {isExporting ? "Aktarılıyor..." : "Tamamlananları Excel'e Aktar"}
-                              </span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
