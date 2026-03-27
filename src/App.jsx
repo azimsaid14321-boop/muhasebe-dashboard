@@ -119,7 +119,7 @@ function Dashboard() {
   const [loadingIslem, setLoadingIslem] = useState(false);
   const [selectedModalItem, setSelectedModalItem] = useState(null);
   const [modalFormData, setModalFormData] = useState({});
-  const [isModalSaving, setIsModalSaving] = useState(false);
+  const [savingIds, setSavingIds] = useState([]); // Yeni: İşlemdeki evrak ID'lerini tutar
   const [isExporting, setIsExporting] = useState(false);
   const reportNameInputRef = useRef(null);
 
@@ -128,7 +128,6 @@ function Dashboard() {
   const [uploadQueueIndex, setUploadQueueIndex] = useState(0); // hangi evrak gösteriliyor
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadModalFormData, setUploadModalFormData] = useState({});
-  const [isUploadModalSaving, setIsUploadModalSaving] = useState(false);
 
   // ─── Smart Magnifier (Akıllı Büyüteç) ──────────────────────────────────
   const imgContainerRef = useRef(null);
@@ -148,7 +147,7 @@ function Dashboard() {
         showToast('En fazla 30 dosya yükleyebilirsiniz. Sadece ilk 30 dosya eklendi.', 'error');
       }
       const limitedFiles = fileArray.slice(0, 30);
-      setSelectedFiles(limitedFiles);
+      setSelectedFiles(prev => [...prev, ...limitedFiles]);
     }
   };
 
@@ -588,7 +587,8 @@ function Dashboard() {
         const fileName = currentFile.name;
 
         // 1. Upload to receipt_images bucket
-        const filePath = `${currentUser.id}/${currentFile.name}`;
+        const safeName = encodeURIComponent(currentFile.name);
+        const filePath = `${currentUser.id}/${safeName}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('receipt_images')
@@ -641,13 +641,8 @@ function Dashboard() {
           metrics: activeFields
         };
 
-        if (i === 0) {
-          setUploadQueue([newQueueItem]);
-          setUploadQueueIndex(0);
-          // setIsUploadModalOpen(true); -> MODALI İPTAL EDİYORUZ, ARTIK LİSTEDEN TETİKLENECEK
-        } else {
-          setUploadQueue(prev => [...prev, newQueueItem]);
-        }
+        // Kuyruğa ekle (Öncekileri Koru)
+        setUploadQueue(prev => [...prev, newQueueItem]);
 
         // 4. Trigger Senkron Webhook
         // Await ediyoruz: bu işlem bloğunu bekletecek, kullanıcı bu arada 'Yapay zeka analiz ediyor' animasyonunu izleyecek
@@ -707,23 +702,36 @@ function Dashboard() {
 
   const handleSaveReview = async () => {
     if (!selectedModalItem) return;
-    setIsModalSaving(true);
+    
+    const currentId = selectedModalItem.id;
+    const updatedStatus = 'TAMAMLANDI';
+    
+    // ─── ANLIK GERİBİLDİRİM (Local Update) ───
+    setIslemListesi(prev => prev.map(it => it.id === currentId ? { ...it, status: updatedStatus, extracted_data: modalFormData } : it));
+    setUploadQueue(prev => prev.map(q => q.recordId === currentId ? { ...q, status: updatedStatus } : q));
+    setSelectedModalItem(prev => prev ? { ...prev, status: updatedStatus } : null);
+
+    setSavingIds(prev => [...prev, currentId]);
     try {
       const { error } = await supabase
         .from('evrak_islemleri')
-        .update({ status: 'TAMAMLANDI', extracted_data: modalFormData })
-        .eq('id', selectedModalItem.id);
+        .update({ status: updatedStatus, extracted_data: modalFormData })
+        .eq('id', currentId);
 
       if (error) throw error;
 
       showToast('Veriler başarıyla sisteme kaydedildi.', 'success');
-      setSelectedModalItem(null); // Modalı kapat
-      fetchIslemListesi(); // Listeyi yenile
+      
+      // Buton değişimini kullanıcıya hissettirmek için kısa bir bekleme
+      setTimeout(() => {
+        setSavingIds(prev => prev.filter(id => id !== currentId));
+        setSelectedModalItem(null); // Modalı kapat
+        fetchIslemListesi(); // Listeyi yenile
+      }, 800);
     } catch (err) {
       console.error('[handleSaveReview] Hata:', err);
       showToast('İşlem sırasında bir hata oluştu. Lütfen tekrar deneyin.', 'error');
-    } finally {
-      setIsModalSaving(false);
+      setSavingIds(prev => prev.filter(id => id !== currentId));
     }
   };
 
@@ -731,33 +739,42 @@ function Dashboard() {
   const handleSaveUploadReview = async () => {
     const currentItem = uploadQueue[uploadQueueIndex];
     if (!currentItem?.recordId) return;
-    setIsUploadModalSaving(true);
+    
+    const currentId = currentItem.recordId;
+    const updatedStatus = 'TAMAMLANDI';
+
+    // ─── ANLIK GERİBİLDİRİM (Local Update) ───
+    setIslemListesi(prev => prev.map(it => it.id === currentId ? { ...it, status: updatedStatus, extracted_data: uploadModalFormData } : it));
+    setUploadQueue(prev => prev.map(q => q.recordId === currentId ? { ...q, status: updatedStatus, extractedData: uploadModalFormData } : q));
+
+    setSavingIds(prev => [...prev, currentId]);
     try {
       const { error } = await supabase
         .from('evrak_islemleri')
-        .update({ status: 'TAMAMLANDI', extracted_data: uploadModalFormData })
-        .eq('id', currentItem.recordId);
+        .update({ status: updatedStatus, extracted_data: uploadModalFormData })
+        .eq('id', currentId);
       if (error) throw error;
 
       showToast('Veri kaydedildi!', 'success');
 
-      // Sırada başka evrak var mı?
-      const nextIndex = uploadQueueIndex + 1;
-      if (nextIndex < uploadQueue.length) {
-        setUploadQueueIndex(nextIndex);
-        setUploadModalFormData({});
-      } else {
-        // Tüm kuyruk bitti, modalı kapat
-        setIsUploadModalOpen(false);
-        setUploadQueue([]);
-        setUploadQueueIndex(0);
-        fetchIslemListesi();
-      }
+      // Feedback süresi
+      setTimeout(() => {
+        setSavingIds(prev => prev.filter(id => id !== currentId));
+        const nextIndex = uploadQueueIndex + 1;
+        if (nextIndex < uploadQueue.length) {
+          setUploadQueueIndex(nextIndex);
+          setUploadModalFormData({});
+        } else {
+          setIsUploadModalOpen(false);
+          setUploadQueue([]);
+          setUploadQueueIndex(0);
+          fetchIslemListesi();
+        }
+      }, 600);
     } catch (err) {
       console.error('[handleSaveUploadReview] Hata:', err);
       showToast('İşlem sırasında bir hata oluştu. Lütfen tekrar deneyin.', 'error');
-    } finally {
-      setIsUploadModalSaving(false);
+      setSavingIds(prev => prev.filter(id => id !== currentId));
     }
   };
 
@@ -1086,11 +1103,11 @@ function Dashboard() {
                     </label>
                   </div>
 
-                  {/* ── Aksiyon Butonları (Her Zaman Görünür) ── */}
-                  <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+                  {/* ── Aksiyon Butonları (Masaüstü: Drag & Drop Altında) ── */}
+                  <div className="hidden lg:flex flex-row items-center gap-4 mt-2">
                     <button
                       onClick={handleClearList}
-                      className="px-6 py-3.5 min-h-[44px] w-full sm:w-auto justify-center rounded-xl border border-white/10 hover:border-red-500/30 bg-[#18181B] hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-sm font-bold flex items-center gap-2 transition-all duration-300 shadow-inner group font-sans"
+                      className="px-6 py-3.5 min-h-[44px] w-auto justify-center rounded-xl border border-white/10 hover:border-red-500/30 bg-[#18181B] hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-sm font-bold flex items-center gap-2 transition-all duration-300 shadow-inner group font-sans"
                     >
                       <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
                       Listeyi Temizle
@@ -1107,7 +1124,7 @@ function Dashboard() {
                         <button
                           onClick={handleExportToExcel}
                           disabled={isBtnDisabled}
-                          className={`relative overflow-hidden w-full sm:w-auto justify-center min-h-[44px] group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
+                          className={`relative overflow-hidden w-auto justify-center min-h-[44px] group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
                             ? 'bg-[#18181B]/50 border border-white/5 text-gray-600 cursor-not-allowed'
                             : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_25px_rgba(16,185,129,0.5)] hover:-translate-y-1'
                             }`}
@@ -1268,17 +1285,28 @@ function Dashboard() {
                                 {isPending ? (
                                   <button
                                     onClick={() => listItem ? openReviewModal(listItem) : null}
-                                    className="relative overflow-hidden group/btn shrink-0 px-3 py-1.5 min-h-[32px] bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-[0_2px_10px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_16px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-200 whitespace-nowrap font-sans"
+                                    disabled={savingIds.includes(q.recordId)}
+                                    className="relative overflow-hidden group/btn shrink-0 px-3 py-1.5 min-h-[32px] bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-[0_2px_10px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_16px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-200 whitespace-nowrap font-sans disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-[#7B61FF] -translate-x-full group-hover/btn:translate-x-0 transition-transform duration-300 z-0" />
                                     <span className="relative z-10 flex items-center gap-1">
-                                      <Eye size={11} /> Onayla
+                                      {savingIds.includes(q.recordId) ? <Loader2 size={11} className="animate-spin" /> : <Eye size={11} />}
+                                      Onayla
                                     </span>
                                   </button>
                                 ) : (
-                                  <span className={`text-[9px] font-bold uppercase tracking-widest font-data ${isDone ? 'text-emerald-400' : isError ? 'text-red-400' : 'text-[#7B61FF]'}`}>
-                                    {isDone ? 'BİTTİ' : isError ? 'HATA' : <Loader2 size={10} className="animate-spin" />}
-                                  </span>
+                                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-bold uppercase tracking-widest font-data transition-all duration-300 ${isDone 
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
+                                    : isError ? 'bg-red-500/10 border-red-500/20 text-red-400' 
+                                    : 'text-[#7B61FF]'}`}>
+                                    {isDone ? (
+                                      <><Check size={10} strokeWidth={3} /> ONAYLANDI</>
+                                    ) : isError ? (
+                                      <>HATA</>
+                                    ) : (
+                                      <><Loader2 size={10} className="animate-spin" /> ANALİZDE</>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1305,6 +1333,46 @@ function Dashboard() {
                         {isProcessing ? 'İşleniyor...' : 'Analizi Başlat'}
                       </span>
                     </button>
+
+                    {/* ── Aksiyon Butonları (Mobil: En Altta) ── */}
+                    <div className="lg:hidden flex flex-col gap-3 mt-6 pb-8 border-t border-white/5 pt-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest font-data">Hızlı İşlemler</span>
+                      </div>
+                      
+                      <button
+                        onClick={handleClearList}
+                        className="px-6 py-4 min-h-[48px] w-full justify-center rounded-xl border border-white/10 active:scale-95 bg-[#18181B] text-gray-400 text-sm font-bold flex items-center gap-2 transition-all duration-200 font-sans shadow-lg"
+                      >
+                        <Trash2 size={16} />
+                        Listeyi Temizle
+                      </button>
+
+                      {(() => {
+                        const completedCount = islemListesi.filter(i => {
+                          const n = (i.status || '').trim().toUpperCase().replace(/İ/g, 'I').replace(/Ş/g, 'S').replace(/Ü/g, 'U').replace(/Ö/g, 'O');
+                          return n === 'TAMAMLANDI';
+                        }).length;
+                        const isBtnDisabled = completedCount === 0 || isExporting;
+
+                        return (
+                          <button
+                            onClick={handleExportToExcel}
+                            disabled={isBtnDisabled}
+                            className={`relative overflow-hidden w-full justify-center min-h-[48px] px-8 py-4 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-200 active:scale-95 ${isBtnDisabled
+                              ? 'bg-[#18181B]/50 border border-white/5 text-gray-600 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-xl'
+                              }`}
+                          >
+                            <span className="relative z-10 flex items-center gap-2">
+                              {isExporting ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                              {isExporting ? "Aktarılıyor..." : `Seçilenleri Excel'e Aktar (${completedCount})`}
+                            </span>
+                          </button>
+                        );
+                      })()}
+                    </div>
 
                   </div>
                 </div>
@@ -1499,10 +1567,10 @@ function Dashboard() {
 
             return (
               <div className="fixed inset-0 z-[200] flex bg-[#05050A]/97 backdrop-blur-xl">
-                <div className="w-full h-full flex flex-col md:flex-row overflow-hidden">
+                <div className="w-full h-full flex flex-col md:flex-row overflow-y-auto md:overflow-hidden max-h-[100dvh] md:max-h-full">
 
                   {/* ─── Sol %50: Dosya Önizleme ─── */}
-                  <div className="w-full h-[120px] shrink-0 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
+                  <div className="w-full shrink-0 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
 
                     {/* Üst Bar */}
                     <div className="flex items-center justify-between px-4 py-2 md:px-6 md:py-4 border-b border-white/5 bg-[#05050A]/80 backdrop-blur-md z-10">
@@ -1529,7 +1597,7 @@ function Dashboard() {
                     {/* Dosya Önizleme Alanı — Smart Magnifier */}
                     <div
                       ref={imgContainerRef}
-                      className="flex-1 flex justify-center items-center p-2 md:p-4 bg-[#0A0A14] md:bg-gradient-radial md:from-[#18181B] md:to-[#0A0A14] relative overflow-hidden"
+                      className="w-full h-auto md:flex-1 flex justify-center items-center p-0 md:p-4 bg-[#0A0A14] md:bg-gradient-radial md:from-[#18181B] md:to-[#0A0A14] relative md:overflow-hidden"
                       onMouseMove={(e) => {
                         if (!imgContainerRef.current) return;
                         const rect = imgContainerRef.current.getBoundingClientRect();
@@ -1545,7 +1613,7 @@ function Dashboard() {
                         <img
                           src={item.previewUrl}
                           alt={item.fileName}
-                          className="max-w-full max-h-full object-contain rounded-xl shadow-[0_0_60px_rgba(0,0,0,0.9)] relative z-10 transition-transform duration-300 ease-out select-none"
+                          className="w-full h-auto object-cover md:object-contain rounded-none md:rounded-md md:max-h-full md:shadow-[0_0_60px_rgba(0,0,0,0.9)] relative z-10 transition-transform duration-300 ease-out select-none block"
                           style={{
                             transform: imgZoom.hovered ? 'scale(1.15)' : 'scale(1)',
                             transformOrigin: `${imgZoom.originX} ${imgZoom.originY}`,
@@ -1568,7 +1636,7 @@ function Dashboard() {
                   </div>
 
                   {/* ─── Sağ %50: Bekleme veya Form ─── */}
-                  <div className="w-full flex-1 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)] md:shadow-[-30px_0_80px_rgba(0,0,0,0.8)] z-20">
+                  <div className="w-full flex-1 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)] md:shadow-[-30px_0_80px_rgba(0,0,0,0.8)] z-20 mt-6 md:mt-0">
 
                     {/* Üst Bar */}
                     <div className="flex items-center justify-between px-8 py-5 border-b border-white/5">
@@ -1702,13 +1770,13 @@ function Dashboard() {
                           <div className="pt-4 border-t border-white/5 mt-auto">
                             <button
                               onClick={handleSaveUploadReview}
-                              disabled={isUploadModalSaving}
-                              className={`relative overflow-hidden group w-full py-4 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 font-sans tracking-widest uppercase ${isUploadModalSaving ? 'bg-[#18181B] border border-white/10 cursor-not-allowed text-gray-500' : 'bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_4px_20px_rgba(168,85,247,0.4)] hover:scale-[1.02] hover:shadow-[0_6px_30px_rgba(168,85,247,0.6)]'}`}
+                              disabled={savingIds.includes(uploadQueue[uploadQueueIndex]?.recordId)}
+                              className={`relative overflow-hidden group w-full py-4 rounded-2xl text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 font-sans tracking-widest uppercase ${savingIds.includes(uploadQueue[uploadQueueIndex]?.recordId) ? 'bg-[#18181B] border border-white/10 cursor-not-allowed text-gray-500' : 'bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_4px_20px_rgba(168,85,247,0.4)] hover:scale-[1.02] hover:shadow-[0_6px_30px_rgba(168,85,247,0.6)]'}`}
                             >
-                              {!isUploadModalSaving && <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-600 to-purple-500 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 z-0" />}
+                              {!savingIds.includes(uploadQueue[uploadQueueIndex]?.recordId) && <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-600 to-purple-500 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 z-0" />}
                               <span className="relative z-10 flex items-center gap-2">
-                                {isUploadModalSaving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} strokeWidth={3} />}
-                                {isUploadModalSaving
+                                {savingIds.includes(uploadQueue[uploadQueueIndex]?.recordId) ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} strokeWidth={3} />}
+                                {savingIds.includes(uploadQueue[uploadQueueIndex]?.recordId)
                                   ? 'Kaydediliyor...'
                                   : uploadQueueIndex + 1 < uploadQueue.length
                                     ? `Onayla ve Sıradakine Geç (${uploadQueueIndex + 2}/${uploadQueue.length})`
@@ -1732,20 +1800,20 @@ function Dashboard() {
           {
             selectedModalItem && (
               <div className="fixed inset-0 z-[100] flex bg-[#05050A]/95 backdrop-blur-xl">
-                <div className="w-full h-full flex flex-col md:flex-row overflow-hidden border-t md:border-none border-white/5 shadow-2xl">
+                <div className="w-full h-full flex flex-col md:flex-row overflow-y-auto md:overflow-hidden max-h-[100dvh] md:max-h-full border-t md:border-none border-white/5 shadow-2xl">
 
                   {/* Sol Bölüm: Orijinal Fotoğraf */}
-                  <div className="w-full h-[120px] shrink-0 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
+                  <div className="w-full shrink-0 md:w-1/2 md:h-full bg-[#0A0A14] border-b md:border-b-0 md:border-r border-white/5 flex flex-col relative">
                     <div className="flex items-center justify-between p-3 md:p-6 border-b border-white/5 bg-[#05050A]/80 absolute top-0 w-full z-10 backdrop-blur-md">
                       <h3 className="text-white font-bold flex items-center gap-2.5 text-[12px] md:text-base font-sans tracking-wide"><Eye size={16} className="text-[#7B61FF]" /> Orijinal Evrak</h3>
                       <button onClick={() => setSelectedModalItem(null)} className="md:hidden w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
                         <X size={18} />
                       </button>
                     </div>
-                    <div className="flex-1 relative w-full h-full flex flex-col items-center justify-center p-2 pt-14 md:p-6 md:pt-28 overflow-hidden min-h-0 min-w-0 md:rounded-2xl bg-[#0A0A14] md:bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] md:from-[#18181B] md:to-[#0A0A14]">
+                    <div className="flex-none md:flex-1 relative w-full h-auto md:h-full flex flex-col items-center justify-center p-0 pt-14 md:p-6 md:pt-28 md:overflow-hidden min-w-0 md:rounded-2xl bg-[#0A0A14] md:bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] md:from-[#18181B] md:to-[#0A0A14]">
                       <div className="hidden md:block noise-overlay opacity-10 pointer-events-none" />
                       {selectedModalItem.file_url ? (
-                        <img src={selectedModalItem.file_url} className="block m-auto w-auto h-auto max-w-full max-h-full object-contain object-center transition-transform duration-300 ease-out hover:scale-[1.15] cursor-zoom-in relative z-10 md:drop-shadow-[0_0_20px_rgba(0,0,0,0.5)] rounded-lg md:rounded-xl" alt="Evrak" />
+                        <img src={selectedModalItem.file_url} className="w-full h-auto object-cover md:object-contain rounded-none md:rounded-xl transition-transform duration-300 ease-out hover:scale-[1.15] cursor-zoom-in relative z-10 md:max-h-full md:drop-shadow-[0_0_20px_rgba(0,0,0,0.5)] block" alt="Evrak" />
                       ) : (
                         <span className="text-gray-500 font-medium font-sans relative z-10">Görsel bulunamadı</span>
                       )}
@@ -1753,7 +1821,7 @@ function Dashboard() {
                   </div>
 
                   {/* Sağ Bölüm: Düzenleme Formu */}
-                  <div className="w-full flex-1 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)] md:shadow-[-20px_0_50px_rgba(0,0,0,0.8)] z-20">
+                  <div className="w-full flex-1 md:w-1/2 md:h-full bg-[#18181B] flex flex-col relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)] md:shadow-[-20px_0_50px_rgba(0,0,0,0.8)] z-20 mt-6 md:mt-0">
                     <div className="p-6 md:p-10 flex-1 overflow-y-auto custom-scrollbar flex flex-col">
                       <div className="flex justify-between items-start mb-8 border-b border-white/5 pb-6">
                         <div>
@@ -1781,25 +1849,24 @@ function Dashboard() {
                           Object.entries(modalFormData).map(([key, value]) => (
                             <div key={key}>
                               <label className="text-[10px] font-bold text-[#7B61FF] mb-2 block uppercase tracking-widest pl-1 font-data">{key}</label>
-                                <input
-                                  type="text"
-                                  value={value ?? ''}
-                                  onChange={(e) => setModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                                  className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 min-h-[44px] text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
-                                />
+                              <input
+                                type="text"
+                                value={value ?? ''}
+                                onChange={(e) => setModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
+                                className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 min-h-[44px] text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
+                              />
                             </div>
                           ))
                         ) : (
-                          // extracted_data tamamen boş — aktif alanlardan fallback oluştur
                           extractionFields.filter(f => f.active && f.name).map(f => (
                             <div key={f.id}>
                               <label className="text-[10px] font-bold text-[#7B61FF] mb-2 block uppercase tracking-widest pl-1 font-data">{f.name}</label>
-                                <input
-                                  type="text"
-                                  value={modalFormData[f.name] ?? ''}
-                                  onChange={(e) => setModalFormData(prev => ({ ...prev, [f.name]: e.target.value }))}
-                                  className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 min-h-[44px] text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
-                                />
+                              <input
+                                type="text"
+                                value={modalFormData[f.name] ?? ''}
+                                onChange={(e) => setModalFormData(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-5 py-3.5 min-h-[44px] text-[#F0EFF4] font-data focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
+                              />
                             </div>
                           ))
                         )}
@@ -1808,13 +1875,13 @@ function Dashboard() {
                       <div className="mt-8 pt-6 border-t border-white/5">
                         <button
                           onClick={handleSaveReview}
-                          disabled={isModalSaving}
-                          className={`w-full relative overflow-hidden group ${isModalSaving ? 'bg-[#18181B] border border-white/10 cursor-not-allowed text-gray-400' : 'bg-[#7B61FF] text-white hover:scale-[1.03] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] shadow-[0_4px_14px_0_rgba(123,97,255,0.39)]'} font-bold py-4 md:py-5 rounded-2xl transition-all flex items-center justify-center gap-3 text-base font-sans tracking-wide`}
+                          disabled={savingIds.includes(selectedModalItem?.id) || selectedModalItem?.status === 'TAMAMLANDI'}
+                          className={`w-full relative overflow-hidden group ${savingIds.includes(selectedModalItem?.id) || selectedModalItem?.status === 'TAMAMLANDI' ? 'bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 cursor-not-allowed shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'bg-[#7B61FF] text-white hover:scale-[1.03] ease-[cubic-bezier(0.25,0.46,0.45,0.94)] shadow-[0_4px_14px_0_rgba(123,97,255,0.39)]'} font-bold py-4 md:py-5 rounded-2xl transition-all flex items-center justify-center gap-3 text-base font-sans tracking-wide`}
                         >
-                          {!isModalSaving && <span className="absolute inset-0 w-full h-full bg-indigo-500 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 ease-out z-0" />}
+                          {!savingIds.includes(selectedModalItem?.id) && selectedModalItem?.status !== 'TAMAMLANDI' && <span className="absolute inset-0 w-full h-full bg-indigo-500 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 ease-out z-0" />}
                           <span className="relative z-10 flex items-center gap-3">
-                            {isModalSaving ? <Loader2 size={24} className="animate-spin" /> : <Check size={24} strokeWidth={3} />}
-                            {isModalSaving ? 'KAYDEDİLİYOR...' : 'SİSTEME KAYDET VE ONAYLA'}
+                            {savingIds.includes(selectedModalItem?.id) ? <Loader2 size={24} className="animate-spin" /> : <Check size={24} strokeWidth={3} />}
+                            {selectedModalItem?.status === 'TAMAMLANDI' ? 'ONAYLANDI' : (savingIds.includes(selectedModalItem?.id) ? 'KAYDEDİLİYOR...' : 'SİSTEME KAYDET VE ONAYLA')}
                           </span>
                         </button>
                         <p className="text-center text-xs text-gray-500 mt-4 font-sans max-w-sm mx-auto">Sisteme kaydettikten sonra bu veriyi İşlem Listesi'nden tekrar düzenleyemezsiniz.</p>
