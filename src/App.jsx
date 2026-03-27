@@ -1086,6 +1086,43 @@ function Dashboard() {
                     </label>
                   </div>
 
+                  {/* ── Aksiyon Butonları (Her Zaman Görünür) ── */}
+                  <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+                    <button
+                      onClick={handleClearList}
+                      className="px-6 py-3.5 min-h-[44px] w-full sm:w-auto justify-center rounded-xl border border-white/10 hover:border-red-500/30 bg-[#18181B] hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-sm font-bold flex items-center gap-2 transition-all duration-300 shadow-inner group font-sans"
+                    >
+                      <Trash2 size={16} className="group-hover:scale-110 transition-transform" />
+                      Listeyi Temizle
+                    </button>
+
+                    {(() => {
+                      const completedCount = islemListesi.filter(i => {
+                        const n = (i.status || '').trim().toUpperCase().replace(/İ/g, 'I').replace(/Ş/g, 'S').replace(/Ü/g, 'U').replace(/Ö/g, 'O');
+                        return n === 'TAMAMLANDI';
+                      }).length;
+                      const isBtnDisabled = completedCount === 0 || isExporting;
+
+                      return (
+                        <button
+                          onClick={handleExportToExcel}
+                          disabled={isBtnDisabled}
+                          className={`relative overflow-hidden w-full sm:w-auto justify-center min-h-[44px] group px-8 py-3.5 rounded-xl text-sm font-bold flex items-center gap-2 font-sans tracking-wide transition-all duration-300 ${isBtnDisabled
+                            ? 'bg-[#18181B]/50 border border-white/5 text-gray-600 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-emerald-600 to-green-500 text-white shadow-[0_4px_20px_rgba(16,185,129,0.3)] hover:shadow-[0_6px_25px_rgba(16,185,129,0.5)] hover:-translate-y-1'
+                            }`}
+                        >
+                          {!isBtnDisabled && <span className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-600 -translate-x-full group-hover:translate-x-0 transition-transform duration-500 z-0" />}
+                          <span className="relative z-10 flex items-center gap-2">
+                            {isExporting ? <Loader2 size={18} className="animate-spin" /> : <FileText size={18} />}
+                            {isExporting ? "Aktarılıyor..." : `Seçilenleri Excel'e Aktar (${completedCount})`}
+                          </span>
+                        </button>
+                      );
+                    })()}
+                  </div>
+
+
 
 
                   {/* Hata Alan Webhook'lar */}
