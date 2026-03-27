@@ -30,7 +30,7 @@
       connect-src 'self'
         https://szfzmznxeiwxseixyefa.supabase.co
         wss://szfzmznxeiwxseixyefa.supabase.co
-        https://n8n.akista.me;
+        https://denemeazim10.app.n8n.cloud;
     """
     # HSTS (HTTPS zorunluluğu)
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
