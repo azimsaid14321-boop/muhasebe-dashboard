@@ -1337,14 +1337,11 @@ function Dashboard() {
                                       </span>
                                     </div>
                                   </div>
-                                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-end shrink-0 pr-2 w-full md:w-auto -mt-2 md:mt-0 pb-2 md:pb-0">
-                                    <button onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))} className="text-gray-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-400/10 transition-colors hidden sm:flex">
+                                  <div className="flex flex-row items-center gap-3 justify-end shrink-0 pr-2 w-full md:w-auto pb-2 md:pb-0">
+                                    <button onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))} className="text-gray-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-400/10 transition-colors">
                                       <Trash2 size={18} />
                                     </button>
-                                    <button onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))} className="sm:hidden px-5 py-3 min-h-[44px] border border-white/10 hover:border-red-500/30 bg-[#18181B] hover:bg-red-500/10 text-gray-400 hover:text-red-400 text-[12px] font-bold rounded-xl transition-all flex items-center justify-center gap-2 font-sans w-full">
-                                      <Trash2 size={16} /> Listeden Çıkar
-                                    </button>
-                                    <button onClick={() => handleAnalyzeSingle(idx)} className="px-5 py-3 min-h-[44px] bg-gradient-to-r from-purple-600 to-fuchsia-500 hover:scale-105 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] text-white text-[12px] font-bold tracking-wider rounded-xl transition-all shadow-[0_4px_20px_rgba(168,85,247,0.45)] flex items-center justify-center gap-2 uppercase font-sans w-full sm:w-auto">
+                                    <button onClick={() => handleAnalyzeSingle(idx)} className="flex-1 sm:flex-none px-5 py-3 min-h-[44px] bg-gradient-to-r from-purple-600 to-fuchsia-500 hover:scale-105 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] text-white text-[12px] font-bold tracking-wider rounded-xl transition-all shadow-[0_4px_20px_rgba(168,85,247,0.45)] flex items-center justify-center gap-2 uppercase font-sans">
                                       <Sparkles size={16} className="fill-white" /> Analiz Et
                                     </button>
                                   </div>
