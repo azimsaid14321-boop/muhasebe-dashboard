@@ -144,14 +144,11 @@ function Dashboard() {
   const handleFileSelect = (files) => {
     if (files && files.length > 0) {
       const fileArray = Array.from(files);
-      setSelectedFiles(prev => {
-        const totalFiles = [...prev, ...fileArray];
-        if (totalFiles.length > 30) {
-           // We only show the error once, so using a slight trick to avoid multiple instances is fine, or just showToast:
-           showToast('En fazla 30 dosya yükleyebilirsiniz. Listenize eklendi (maks 30).', 'error');
-        }
-        return totalFiles.slice(0, 30);
-      });
+      if (fileArray.length > 30) {
+        showToast('En fazla 30 dosya yükleyebilirsiniz. Sadece ilk 30 dosya eklendi.', 'error');
+      }
+      const limitedFiles = fileArray.slice(0, 30);
+      setSelectedFiles(limitedFiles);
     }
   };
 
@@ -543,78 +540,6 @@ function Dashboard() {
     } finally {
       // 4. KESİN KURAL: Ne olursa olsun yükleniyor (animasyon) state'ini kapat
       setFailedWebhooks(prev => prev.map(item => item.recordId === failedItem.recordId ? { ...item, isRetrying: false } : item));
-    }
-  };
-
-  const handleAnalyzeSingle = async (fileIndex) => {
-    if (!reportName.trim()) {
-      showToast('Lütfen analize başlamadan önce bir Rapor/Dosya İsmi belirleyin.', 'error');
-      if (reportNameInputRef.current) reportNameInputRef.current.focus();
-      return;
-    }
-
-    const fileToProcess = selectedFiles[fileIndex];
-    if (!fileToProcess) return;
-
-    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/zip', 'application/x-zip-compressed'];
-    const MAX_SIZE_MB = 10;
-    if (!ALLOWED_TYPES.includes(fileToProcess.type)) {
-      showToast(`${fileToProcess.name} desteklenmeyen tür.`, 'error');
-      return;
-    }
-    if (fileToProcess.size > MAX_SIZE_MB * 1024 * 1024) {
-      showToast(`${fileToProcess.name} dosyası ${MAX_SIZE_MB}MB sınırını aşıyor.`, 'error');
-      return;
-    }
-
-    setSelectedFiles(prev => prev.filter((_, i) => i !== fileIndex));
-
-    try {
-      const activeFields = extractionFields.filter(f => f.active).map(f => f.name);
-      const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData?.user?.id) { showToast('Oturum bilgisi bulunamadı.', 'error'); return; }
-      const currentUser = userData.user;
-
-      const fileName = fileToProcess.name;
-      const filePath = `${currentUser.id}/${fileName}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage.from('receipt_images').upload(filePath, fileToProcess, { cacheControl: '3600', upsert: true, contentType: fileToProcess.type });
-      if (uploadError) throw new Error('Dosya yüklenemedi.');
-
-      const storedPath = uploadData?.path ?? filePath;
-      const { data: publicUrlData } = supabase.storage.from('receipt_images').getPublicUrl(storedPath);
-      const fileUrl = publicUrlData?.publicUrl;
-      if (!fileUrl) throw new Error('Dosya URL alınamadı.');
-
-      const { data: insertData, error: insertError } = await supabase.from('evrak_islemleri').insert([{ file_url: fileUrl, status: 'pending', file_name: fileName, fields: activeFields }]).select().single();
-      if (insertError) throw new Error('Kayıt oluşturulamadı.');
-      
-      const recordId = insertData.id;
-      setSessionBatchIds(prev => [recordId, ...prev]);
-
-      setIslemListesi(prev => [{ id: recordId, file_url: fileUrl, file_name: fileName, status: 'pending', fields: activeFields, created_at: new Date().toISOString(), extracted_data: null }, ...prev]);
-
-      const newQueueItem = { recordId, fileUrl, fileName, status: 'pending', isTimeoutError: false, metrics: activeFields };
-      if (uploadQueue.length === 0) {
-          setUploadQueue([newQueueItem]);
-          setUploadQueueIndex(0);
-      } else {
-          setUploadQueue(prev => [...prev, newQueueItem]);
-      }
-
-      showToast(`✓ ${fileName} analize gönderildi`, 'info');
-
-      const webhookResult = await triggerWebhookSync(recordId, fileUrl, activeFields, fileName);
-
-      if (!webhookResult.success && !webhookResult.isTimeout) {
-        setFailedWebhooks(prev => [...prev, { recordId, fileUrl, fileName, metrics: activeFields, isRetrying: false }]);
-        showToast(`${fileName} API'ye gönderilemedi!`, 'error');
-      } else if (webhookResult.success) {
-        showToast(`✓ ${fileName} analizi tamamlandı!`, 'success');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast(err.message, 'error');
     }
   };
 
@@ -1119,10 +1044,10 @@ function Dashboard() {
               </header>
 
               {/* Split-Panel Grid */}
-              <div className="flex flex-wrap lg:flex-nowrap lg:flex-row gap-6 flex-1 min-h-0 w-full">
+              <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
 
                 {/* ─── SOL PANEL — %65 ─── */}
-                <div className="flex flex-col gap-5 w-full lg:w-[65%] order-1">
+                <div className="flex flex-col gap-5 lg:w-[65%]">
 
                   {/* Rapor/Dosya İsmi */}
                   <div className="sticky top-0 z-[50] bg-[#0A0A0A] md:bg-[#18181B]/80 border-b md:border border-white/10 md:border-white/5 md:backdrop-blur-md rounded-b-3xl md:rounded-[2rem] p-5 md:p-5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] md:shadow-xl shrink-0 -mx-4 md:mx-0 px-8 md:px-5">
@@ -1137,33 +1062,58 @@ function Dashboard() {
                     />
                   </div>
 
-                  {/* Drag & Drop Zone */}
+                  {/* Drag & Drop Zone — Her Zaman Temiz */}
                   <div
-                    className={`flex-1 relative rounded-[2rem] border-2 border-dashed flex items-center justify-center p-6 md:p-12 transition-all duration-300 min-h-[260px] bg-[#18181B]/40 border-white/10 hover:border-[#7B61FF]/50 hover:bg-[#18181B]/80 backdrop-blur-sm ${dragActive ? 'border-[#7B61FF] bg-[#7B61FF]/10 shadow-[0_0_60px_rgba(123,97,255,0.25)]' : ''}`}
+                    className={`relative rounded-[2rem] border-2 border-dashed flex items-center justify-center p-8 md:p-12 transition-all duration-300 min-h-[220px] ${dragActive ? 'border-[#7B61FF] bg-[#7B61FF]/10 shadow-[0_0_60px_rgba(123,97,255,0.25)]' : 'border-white/10 bg-[#18181B]/40 hover:border-[#7B61FF]/50 hover:bg-[#18181B]/80 backdrop-blur-sm'}`}
                     onDragEnter={handleDrag}
                     onDragLeave={handleDrag}
                     onDragOver={handleDrag}
                     onDrop={handleDrop}
                   >
-                    <div className="relative z-10 flex flex-col items-center text-center max-w-md group w-full">
+                    <label className="relative z-10 flex flex-col items-center text-center max-w-md group cursor-pointer w-full">
                       <div className="w-20 h-20 md:w-24 md:h-24 rounded-full bg-[#7B61FF]/10 border border-[#7B61FF]/30 flex items-center justify-center mb-4 md:mb-6 shadow-[0_0_20px_#7B61FF30] group-hover:scale-110 group-hover:bg-[#7B61FF]/20 transition-all duration-500">
                         <UploadCloud size={40} className="text-[#7B61FF]" />
                       </div>
-                      <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 tracking-tight font-sans">
-                        Sürükle & Bırak
-                      </h3>
-                      <div className="text-gray-400 text-base mb-8 flex items-center gap-1.5 justify-center font-sans">
+                      <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 tracking-tight font-sans">Sürükle & Bırak</h3>
+                      <div className="text-gray-400 text-base mb-6 flex items-center gap-1.5 justify-center font-sans">
                         <span>veya</span>
-                        <label className="text-[#7B61FF] hover:text-[#917bfd] font-medium cursor-pointer transition-colors underline underline-offset-2 decoration-[#7B61FF]/40">
-                          Dosyaları Seç
-                          <input type="file" className="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,.zip" onChange={(e) => handleFileSelect(e.target.files)} />
-                        </label>
+                        <span className="text-[#7B61FF] hover:text-[#917bfd] font-medium transition-colors underline underline-offset-2 decoration-[#7B61FF]/40">Dosyaları Seç</span>
                       </div>
                       <div className="inline-flex items-center justify-center bg-[#0A0A14]/80 rounded-xl px-5 py-2.5 border border-white/5 shadow-inner">
-                        <span className="text-[#7B61FF] text-[10px] uppercase tracking-widest font-bold font-data">JPG · PNG · PDF kabul edilir</span>
+                        <span className="text-[#7B61FF] text-[10px] uppercase tracking-widest font-bold font-data">JPG · PNG · PDF · ZIP kabul edilir</span>
                       </div>
-                    </div>
+                      <input type="file" className="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,.zip" onChange={(e) => handleFileSelect(e.target.files)} />
+                    </label>
                   </div>
+
+                  {/* Seçili Dosya Listesi — Dropzone'un Altında, Temiz Akış */}
+                  {selectedFiles.length > 0 && (
+                    <div className="flex flex-col gap-2 p-4 bg-[#18181B]/80 border border-white/5 rounded-[1.5rem] backdrop-blur-md shadow-lg">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
+                          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest font-data">{selectedFiles.length} Dosya Seçildi</span>
+                        </div>
+                        <button
+                          onClick={(e) => { e.preventDefault(); setSelectedFiles([]); setReportName(''); }}
+                          className="text-[10px] text-gray-600 hover:text-red-400 font-medium transition-colors font-data uppercase tracking-widest"
+                        >
+                          Temizle
+                        </button>
+                      </div>
+                      {selectedFiles.map((f, i) => (
+                        <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-[#0A0A14]/60 border border-white/5">
+                          <FileText size={14} className="text-[#7B61FF] shrink-0" />
+                          <span className="text-xs text-[#F0EFF4] font-data truncate flex-1">{f.name}</span>
+                          <span className="text-[10px] text-gray-600 font-data shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                        </div>
+                      ))}
+                      <label className="mt-1 w-full min-h-[40px] border border-dashed border-[#7B61FF]/30 hover:border-[#7B61FF]/60 text-[#7B61FF] hover:bg-[#7B61FF]/5 rounded-xl flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer font-sans">
+                        <Plus size={14} strokeWidth={3} /> Başka Dosya Ekle
+                        <input type="file" className="hidden" multiple accept=".jpg,.jpeg,.png,.pdf,.zip" onChange={(e) => { if (e.target.files) handleFileSelect([...selectedFiles, ...Array.from(e.target.files)]); }} />
+                      </label>
+                    </div>
+                  )}
 
                   {/* Hata Alan Webhook'lar */}
                   {failedWebhooks.length > 0 && (
@@ -1197,7 +1147,7 @@ function Dashboard() {
                 </div>
 
                 {/* ─── SAĞ PANEL — %35 ─── */}
-                <div className="flex flex-col w-full lg:w-[35%] shrink-0 order-2">
+                <div className="flex flex-col lg:w-[35%] shrink-0">
                   <div className="bg-[#18181B]/80 border border-white/5 backdrop-blur-md rounded-[2rem] p-6 shadow-xl flex flex-col flex-1">
 
                     {/* Panel Başlığı */}
@@ -1254,6 +1204,50 @@ function Dashboard() {
                       </button>
                     </div>
 
+                    {/* ── Onay Bekleyen Evrak Kartları (Analizi Başlat üstünde) ── */}
+                    {uploadQueue.filter(q => {
+                      const norm = (q.status || '').trim().toUpperCase().replace(/İ/g,'I').replace(/Ş/g,'S');
+                      return norm.includes('ONAY') && norm.includes('BEKL');
+                    }).length > 0 && (
+                      <div className="flex flex-col gap-2 mb-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shadow-[0_0_6px_rgba(251,191,36,0.8)]" />
+                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest font-data">Onay Bekleyen Evraklar</span>
+                        </div>
+                        {uploadQueue.filter(q => {
+                          const norm = (q.status || '').trim().toUpperCase().replace(/İ/g,'I').replace(/Ş/g,'S');
+                          return norm.includes('ONAY') && norm.includes('BEKL');
+                        }).map(q => {
+                          const listItem = islemListesi.find(it => it.id === q.recordId);
+                          return (
+                            <div key={q.recordId} className="flex items-center justify-between gap-3 p-3 rounded-[1.25rem] border border-amber-500/20 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10 transition-all duration-200">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="relative w-9 h-9 shrink-0 rounded-lg overflow-hidden border border-white/10">
+                                  {q.fileUrl ? (
+                                    <img src={q.fileUrl} alt="Evrak" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-[#18181B]">
+                                      <FileText size={14} className="text-gray-600" />
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-xs font-bold text-[#F0EFF4] truncate max-w-[90px] font-sans">{q.fileName}</span>
+                              </div>
+                              <button
+                                onClick={() => listItem ? openReviewModal(listItem) : null}
+                                className="relative overflow-hidden group/btn shrink-0 px-3 py-1.5 min-h-[32px] bg-gradient-to-r from-[#7B61FF] to-fuchsia-500 text-white text-[11px] font-bold rounded-lg flex items-center gap-1 shadow-[0_2px_10px_rgba(123,97,255,0.4)] hover:shadow-[0_4px_16px_rgba(123,97,255,0.6)] hover:scale-[1.04] transition-all duration-200 whitespace-nowrap font-sans"
+                              >
+                                <span className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 to-[#7B61FF] -translate-x-full group-hover/btn:translate-x-0 transition-transform duration-300 z-0" />
+                                <span className="relative z-10 flex items-center gap-1">
+                                  <Eye size={11} /> İncele & Onayla
+                                </span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
                     {/* ── Analizi Başlat Butonu ── */}
                     <button
                       onClick={handleAnalyze}
@@ -1277,9 +1271,9 @@ function Dashboard() {
                 {/* İşlem Listesi kapanış etiketi — aşağıda devam ediyor */}
 
               </div>
-              {/* ── İşlem Listesi (Her zaman en altta) ── */}
-              {(islemListesi.length > 0 || selectedFiles.length > 0) && (
-                <div className="mt-8 w-full relative z-30 order-3 lg:order-3">
+              {/* ── İşlem Listesi (Yükleme Panelinin Altına Embed) ── */}
+              {islemListesi.length > 0 && (
+                <div className="mt-20 md:mt-10 w-full relative z-30">
                   {/* Dekoratif ayraç */}
                   <div className="flex items-center gap-4 mb-6">
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
@@ -1306,49 +1300,21 @@ function Dashboard() {
 
                   <div className="bg-[#18181B]/40 border border-white/5 rounded-[2rem] overflow-hidden backdrop-blur-md shadow-xl w-full">
                     <div className="p-5 space-y-3 max-h-[600px] overflow-y-auto overflow-x-hidden custom-scrollbar w-full">
-                      {loadingIslem && islemListesi.length === 0 && selectedFiles.length === 0 ? (
+                      {loadingIslem && islemListesi.length === 0 ? (
                         <div className="flex justify-center items-center py-16 text-gray-400">
                           <div className="flex flex-col items-center gap-3">
                             <Loader2 size={28} className="animate-spin text-[#7B61FF]" />
                             <span className="text-sm font-medium font-sans">İşlemler Yükleniyor...</span>
                           </div>
                         </div>
-                      ) : islemListesi.length === 0 && selectedFiles.length === 0 ? (
+                      ) : islemListesi.length === 0 ? (
                         <div className="text-center py-16 text-gray-600 font-medium font-sans">
                           <List size={36} className="mx-auto mb-3 text-gray-700" />
-                          <p className="text-sm">Henüz bir evrak yüklenmedi.</p>
-                          <p className="text-xs text-gray-700 mt-1">Sürükle bırak alanını kullanarak dosya ekleyin.</p>
+                          <p className="text-sm">Henüz bir işlem bulunmuyor.</p>
+                          <p className="text-xs text-gray-700 mt-1">Yukarıdan dosya yükle ve Analizi Başlat butonuna bas.</p>
                         </div>
                       ) : (
-                        <>
-                          {selectedFiles.map((file, idx) => (
-                              <div key={`sel-${idx}`} className={`group overflow-x-auto custom-scrollbar rounded-[1.5rem] border transition-all duration-300 w-full border-[#7B61FF]/30 bg-[#7B61FF]/5 hover:border-[#7B61FF]/50 hover:bg-[#7B61FF]/10 shadow-[0_0_20px_rgba(123,97,255,0.08)]`}>
-                                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 min-w-[max-content] md:min-w-0 w-full">
-                                  <div className="flex items-center gap-3 min-w-0 shrink-0 sticky left-0 z-10 pl-2 bg-[#18181B]/90 md:bg-transparent backdrop-blur-sm rounded-r-xl">
-                                    <div className="relative w-14 h-14 shrink-0 rounded-xl overflow-hidden border border-[#7B61FF]/30 bg-[#0A0A14] flex items-center justify-center">
-                                      <FileText size={20} className="text-[#7B61FF]" />
-                                    </div>
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="font-bold text-white truncate max-w-[160px] sm:max-w-xs font-sans tracking-tight text-sm">
-                                        {file.name}
-                                      </span>
-                                      <span className="text-[10px] text-gray-500 mt-0.5 flex items-center gap-1 font-data tracking-wider uppercase">
-                                        <Clock size={8} /> Gönderime Hazır
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-row items-center gap-3 justify-end shrink-0 pr-2 w-full md:w-auto pb-2 md:pb-0">
-                                    <button onClick={() => setSelectedFiles(prev => prev.filter((_, i) => i !== idx))} className="text-gray-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-400/10 transition-colors">
-                                      <Trash2 size={18} />
-                                    </button>
-                                    <button onClick={() => handleAnalyzeSingle(idx)} className="flex-1 sm:flex-none px-5 py-3 min-h-[44px] bg-gradient-to-r from-purple-600 to-fuchsia-500 hover:scale-105 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] text-white text-[12px] font-bold tracking-wider rounded-xl transition-all shadow-[0_4px_20px_rgba(168,85,247,0.45)] flex items-center justify-center gap-2 uppercase font-sans">
-                                      <Sparkles size={16} className="fill-white" /> Analiz Et
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                          ))}
-                          {islemListesi.map(item => {
+                        islemListesi.map(item => {
                           const rawStatus = (item.status || '').trim();
                           const norm = rawStatus.toUpperCase()
                             .replace(/İ/g, 'I').replace(/Ş/g, 'S')
@@ -1454,8 +1420,7 @@ function Dashboard() {
                               </div>
                             </div>
                           );
-                        })}
-                        </>
+                        })
                       )}
                     </div>
 
@@ -1470,12 +1435,11 @@ function Dashboard() {
 
                       return (
                         <div className="p-6 border-t border-white/5 bg-[#05050A]/60 flex flex-col md:flex-row items-center justify-between gap-6 mt-6 md:mt-2">
-                          <p className="text-gray-400 text-xs font-sans text-center md:text-left leading-relaxed">
-                            {completedCount > 0
-                              ? <span className="text-emerald-400 font-bold text-[13px]">{completedCount} evrak</span>
-                              : "Gönderime hazır evrak yok."}
-                            {completedCount > 0 && " Excel'e aktarılmaya hazır."}
-                          </p>
+                          {completedCount > 0 && (
+                            <p className="text-gray-400 text-xs font-sans text-center md:text-left leading-relaxed">
+                              <span className="text-emerald-400 font-bold text-[13px]">{completedCount} evrak</span>{" Excel'e aktarılmaya hazır."}
+                            </p>
+                          )}
                           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
                             <button
                               onClick={handleClearList}
