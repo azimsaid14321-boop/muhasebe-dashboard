@@ -1119,10 +1119,10 @@ function Dashboard() {
               </header>
 
               {/* Split-Panel Grid */}
-              <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
+              <div className="flex flex-wrap lg:flex-nowrap lg:flex-row gap-6 flex-1 min-h-0 w-full">
 
                 {/* ─── SOL PANEL — %65 ─── */}
-                <div className="flex flex-col gap-5 lg:w-[65%]">
+                <div className="flex flex-col gap-5 w-full lg:w-[65%] order-1">
 
                   {/* Rapor/Dosya İsmi */}
                   <div className="sticky top-0 z-[50] bg-[#0A0A0A] md:bg-[#18181B]/80 border-b md:border border-white/10 md:border-white/5 md:backdrop-blur-md rounded-b-3xl md:rounded-[2rem] p-5 md:p-5 shadow-[0_20px_40px_rgba(0,0,0,0.8)] md:shadow-xl shrink-0 -mx-4 md:mx-0 px-8 md:px-5">
@@ -1197,7 +1197,7 @@ function Dashboard() {
                 </div>
 
                 {/* ─── SAĞ PANEL — %35 ─── */}
-                <div className="flex flex-col lg:w-[35%] shrink-0">
+                <div className="flex flex-col w-full lg:w-[35%] shrink-0 order-2">
                   <div className="bg-[#18181B]/80 border border-white/5 backdrop-blur-md rounded-[2rem] p-6 shadow-xl flex flex-col flex-1">
 
                     {/* Panel Başlığı */}
@@ -1277,9 +1277,9 @@ function Dashboard() {
                 {/* İşlem Listesi kapanış etiketi — aşağıda devam ediyor */}
 
               </div>
-              {/* ── İşlem Listesi (Yükleme Panelinin Altına Embed) ── */}
+              {/* ── İşlem Listesi (Her zaman en altta) ── */}
               {(islemListesi.length > 0 || selectedFiles.length > 0) && (
-                <div className="mt-20 md:mt-10 w-full relative z-30">
+                <div className="mt-8 w-full relative z-30 order-3 lg:order-3">
                   {/* Dekoratif ayraç */}
                   <div className="flex items-center gap-4 mb-6">
                     <div className="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
