@@ -416,7 +416,7 @@ function Dashboard() {
 
     try {
       console.log(`[Webhook] Senkron istek başlatılıyor... (Record ID: ${recordId})`);
-      const response = await fetch('https://azimdeneme.app.n8n.cloud/webhook/analyze-receipt', {
+      const response = await fetch('https://denemeazim10.app.n8n.cloud/webhook/analyze-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -803,7 +803,7 @@ function Dashboard() {
         ...parseExtractedData(item)
       }));
 
-      const response = await fetch('https://azimdeneme.app.n8n.cloud/webhook/save-receipt', {
+      const response = await fetch('https://denemeazim10.app.n8n.cloud/webhook/save-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
