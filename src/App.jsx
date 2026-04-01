@@ -649,8 +649,13 @@ function Dashboard() {
         setUploadQueue(prev => [...prev, newQueueItem]);
 
         // 4. Trigger Senkron Webhook
-        // Await ediyoruz: bu işlem bloğunu bekletecek, kullanıcı bu arada 'Yapay zeka analiz ediyor' animasyonunu izleyecek
-        const webhookResult = await triggerWebhookSync(recordId, fileUrl, activeFields, fileName);
+        // VALIDASYON: İstek atmadan hemen önce verileri kontrol et
+        if (!recordId || !fileUrl) {
+          console.warn("[handleAnalyze] Kritik Veri Eksik:", { recordId, fileUrl });
+          throw new Error("Kayıt ID veya Dosya URL'si hazırlanamadı.");
+        }
+
+        const webhookResult = await triggerWebhookSync(recordId, fileUrl, activeFields, originalFileName);
 
         if (!webhookResult.success && !webhookResult.isTimeout) {
           // Kesin hata durumu
@@ -678,7 +683,7 @@ function Dashboard() {
       setSelectedFiles([]);
 
     } catch (error) {
-      console.error('[handleAnalyze] Hata:', error);
+      console.error('ANALİZ ÇÖKME DETAYI:', error);
       showToast('İşlem sırasında bir hata oluştu. Lütfen tekrar deneyin.', 'error');
     } finally {
       setIsProcessing(false);
