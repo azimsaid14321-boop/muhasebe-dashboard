@@ -635,6 +635,7 @@ function Dashboard() {
         const newQueueItem = {
           recordId,
           fileUrl,
+          previewUrl: fileUrl, // Ekle: Modalda görselin görünmesi için
           fileName,
           status: 'pending',
           isTimeoutError: false,
@@ -1271,7 +1272,7 @@ function Dashboard() {
                               <div className="flex items-center gap-2 min-w-0">
                                 <div className="relative w-9 h-9 shrink-0 rounded-lg overflow-hidden border border-white/10">
                                   {q.fileUrl ? (
-                                    <img src={q.fileUrl} alt="Evrak" className="w-full h-full object-cover" />
+                                    <img src={encodeURI(q.fileUrl)} alt="Evrak" className="w-full h-full object-cover" />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-[#18181B]">
                                       <FileText size={14} className="text-gray-600" />
@@ -1611,7 +1612,7 @@ function Dashboard() {
                       <div className="noise-overlay opacity-20" />
                       {item.previewUrl ? (
                         <img
-                          src={item.previewUrl}
+                          src={encodeURI(item.previewUrl)}
                           alt={item.fileName}
                           className="w-full h-auto object-cover md:object-contain rounded-none md:rounded-md md:max-h-full md:shadow-[0_0_60px_rgba(0,0,0,0.9)] relative z-10 transition-transform duration-300 ease-out select-none block"
                           style={{
