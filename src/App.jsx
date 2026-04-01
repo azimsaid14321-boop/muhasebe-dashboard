@@ -420,7 +420,8 @@ function Dashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': '69420'
         },
         body: JSON.stringify({
           record_id: recordId,
@@ -828,7 +829,8 @@ function Dashboard() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': '69420'
         },
         body: JSON.stringify({
           dosyaIsmi: reportName,
