@@ -416,7 +416,7 @@ function Dashboard() {
 
     try {
       console.log(`[Webhook] Senkron istek başlatılıyor... (Record ID: ${recordId})`);
-      const response = await fetch('https://denemeazim10.app.n8n.cloud/webhook/analyze-receipt', {
+      const response = await fetch('https://resiniferous-gymnastically-aidan.ngrok-free.dev/webhook/analyze-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -702,10 +702,10 @@ function Dashboard() {
 
   const handleSaveReview = async () => {
     if (!selectedModalItem) return;
-    
+
     const currentId = selectedModalItem.id;
     const updatedStatus = 'TAMAMLANDI';
-    
+
     // ─── ANLIK GERİBİLDİRİM (Local Update) ───
     setIslemListesi(prev => prev.map(it => it.id === currentId ? { ...it, status: updatedStatus, extracted_data: modalFormData } : it));
     setUploadQueue(prev => prev.map(q => q.recordId === currentId ? { ...q, status: updatedStatus } : q));
@@ -721,7 +721,7 @@ function Dashboard() {
       if (error) throw error;
 
       showToast('Veriler başarıyla sisteme kaydedildi.', 'success');
-      
+
       // Buton değişimini kullanıcıya hissettirmek için kısa bir bekleme
       setTimeout(() => {
         setSavingIds(prev => prev.filter(id => id !== currentId));
@@ -739,7 +739,7 @@ function Dashboard() {
   const handleSaveUploadReview = async () => {
     const currentItem = uploadQueue[uploadQueueIndex];
     if (!currentItem?.recordId) return;
-    
+
     const currentId = currentItem.recordId;
     const updatedStatus = 'TAMAMLANDI';
 
@@ -821,7 +821,7 @@ function Dashboard() {
         ...parseExtractedData(item)
       }));
 
-      const response = await fetch('https://denemeazim10.app.n8n.cloud/webhook/save-receipt', {
+      const response = await fetch('https://resiniferous-gymnastically-aidan.ngrok-free.dev/webhook/save-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -883,9 +883,9 @@ function Dashboard() {
       </div>
 
       {/* ─── Mobil Overlay (Arkaplan Kilidi) ─── */}
-      <div 
+      <div
         className={`fixed inset-0 bg-[#05050A]/80 backdrop-blur-sm z-30 md:hidden transition-opacity duration-300 ${isMobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => setIsMobileMenuOpen(false)} 
+        onClick={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Sol Menü (Sidebar) */}
@@ -955,7 +955,7 @@ function Dashboard() {
             </div>
             <span className="text-lg font-bold tracking-tight text-white">MUHASY</span>
           </div>
-          <button 
+          <button
             onClick={() => setIsMobileMenuOpen(true)}
             className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-white transition-colors"
           >
@@ -1245,11 +1245,11 @@ function Dashboard() {
                         {/* Henüz analize girmemiş seçili dosyalar */}
                         {!isProcessing && selectedFiles.map((f, i) => (
                           <div key={`sel-${i}`} className="flex items-center justify-between gap-3 p-3 rounded-[1.25rem] border border-white/10 bg-[#0A0A14]/40">
-                             <div className="flex items-center gap-2 min-w-0">
-                               <FileText size={14} className="text-gray-600 shrink-0" />
-                               <span className="text-[11px] font-medium text-gray-400 truncate font-sans">{f.name}</span>
-                             </div>
-                             <span className="text-[9px] font-bold text-[#7B61FF]/60 uppercase tracking-widest font-data">BEKLİYOR</span>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileText size={14} className="text-gray-600 shrink-0" />
+                              <span className="text-[11px] font-medium text-gray-400 truncate font-sans">{f.name}</span>
+                            </div>
+                            <span className="text-[9px] font-bold text-[#7B61FF]/60 uppercase tracking-widest font-data">BEKLİYOR</span>
                           </div>
                         ))}
 
@@ -1257,17 +1257,17 @@ function Dashboard() {
                         {uploadQueue.map((q) => {
                           const listItem = islemListesi.find(it => it.id === q.recordId);
                           const rawStatus = (q.status || '').trim();
-                          const norm = rawStatus.toUpperCase().replace(/İ/g,'I').replace(/Ş/g,'S').replace(/Ü/g,'U').replace(/Ö/g,'O');
+                          const norm = rawStatus.toUpperCase().replace(/İ/g, 'I').replace(/Ş/g, 'S').replace(/Ü/g, 'U').replace(/Ö/g, 'O');
                           const isPending = norm.includes('ONAY') && norm.includes('BEKL');
                           const isDone = norm === 'TAMAMLANDI';
                           const isError = norm === 'HATA';
 
                           return (
-                            <div key={q.recordId} className={`flex items-center justify-between gap-3 p-3 rounded-[1.25rem] border transition-all duration-200 ${isPending 
-                              ? 'border-amber-500/20 bg-amber-500/5 shadow-[0_0_10px_rgba(251,191,36,0.05)]' 
-                              : isDone ? 'border-emerald-500/10 bg-emerald-500/5' 
-                              : isError ? 'border-red-500/15 bg-red-500/5'
-                              : 'border-white/5 bg-[#0A0A14]/40'}`}>
+                            <div key={q.recordId} className={`flex items-center justify-between gap-3 p-3 rounded-[1.25rem] border transition-all duration-200 ${isPending
+                              ? 'border-amber-500/20 bg-amber-500/5 shadow-[0_0_10px_rgba(251,191,36,0.05)]'
+                              : isDone ? 'border-emerald-500/10 bg-emerald-500/5'
+                                : isError ? 'border-red-500/15 bg-red-500/5'
+                                  : 'border-white/5 bg-[#0A0A14]/40'}`}>
                               <div className="flex items-center gap-2 min-w-0">
                                 <div className="relative w-9 h-9 shrink-0 rounded-lg overflow-hidden border border-white/10">
                                   {q.fileUrl ? (
@@ -1295,10 +1295,10 @@ function Dashboard() {
                                     </span>
                                   </button>
                                 ) : (
-                                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-bold uppercase tracking-widest font-data transition-all duration-300 ${isDone 
-                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]' 
-                                    : isError ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                                    : 'text-[#7B61FF]'}`}>
+                                  <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-bold uppercase tracking-widest font-data transition-all duration-300 ${isDone
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.1)]'
+                                    : isError ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                                      : 'text-[#7B61FF]'}`}>
                                     {isDone ? (
                                       <><Check size={10} strokeWidth={3} /> ONAYLANDI</>
                                     ) : isError ? (
@@ -1340,7 +1340,7 @@ function Dashboard() {
                         <span className="w-1 h-1 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                         <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest font-data">Hızlı İşlemler</span>
                       </div>
-                      
+
                       <button
                         onClick={handleClearList}
                         className="px-6 py-4 min-h-[48px] w-full justify-center rounded-xl border border-white/10 active:scale-95 bg-[#18181B] text-gray-400 text-sm font-bold flex items-center gap-2 transition-all duration-200 font-sans shadow-lg"
@@ -1757,12 +1757,12 @@ function Dashboard() {
                             {Object.entries(uploadModalFormData).map(([key, value]) => (
                               <div key={key}>
                                 <label className="text-[10px] font-bold text-[#7B61FF] mb-1.5 block uppercase tracking-widest font-data">{key}</label>
-                                  <input
-                                    type="text"
-                                    value={value ?? ''}
-                                    onChange={e => setUploadModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
-                                    className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-4 py-3 min-h-[44px] text-[#F0EFF4] font-data text-sm focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
-                                  />
+                                <input
+                                  type="text"
+                                  value={value ?? ''}
+                                  onChange={e => setUploadModalFormData(prev => ({ ...prev, [key]: e.target.value }))}
+                                  className="w-full bg-[#0A0A14] border border-white/10 rounded-xl px-4 py-3 min-h-[44px] text-[#F0EFF4] font-data text-sm focus:outline-none focus:border-[#7B61FF]/50 focus:shadow-[0_0_15px_rgba(123,97,255,0.1)] transition-all shadow-inner"
+                                />
                               </div>
                             ))}
                           </div>
