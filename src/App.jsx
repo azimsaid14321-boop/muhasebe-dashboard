@@ -584,11 +584,13 @@ function Dashboard() {
 
       for (let i = 0; i < selectedFiles.length; i++) {
         const currentFile = selectedFiles[i];
-        const fileName = currentFile.name;
+        const originalFileName = currentFile.name;
+        // Dosya adını temizle: Boşlukları - yap, özel karakterleri (Türkçe, parantez vb.) sil
+        const cleanName = Date.now() + '-' + originalFileName
+          .replace(/\s+/g, '-')
+          .replace(/[^a-zA-Z0-9\.\-]/g, '');
 
-        // 1. Upload to receipt_images bucket
-        const safeName = encodeURIComponent(currentFile.name);
-        const filePath = `${currentUser.id}/${safeName}`;
+        const filePath = `${currentUser.id}/${cleanName}`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('receipt_images')
@@ -609,7 +611,7 @@ function Dashboard() {
         // 3. Insert to evrak_islemleri
         const { data: insertData, error: insertError } = await supabase
           .from('evrak_islemleri')
-          .insert([{ file_url: fileUrl, status: 'pending', file_name: fileName, fields: activeFields }])
+          .insert([{ file_url: fileUrl, status: 'pending', file_name: originalFileName, fields: activeFields }])
           .select()
           .single();
 
@@ -624,7 +626,7 @@ function Dashboard() {
         setIslemListesi(prev => [{
           id: recordId,
           file_url: fileUrl,
-          file_name: fileName,
+          file_name: originalFileName,
           status: 'pending',
           fields: activeFields,
           created_at: new Date().toISOString(),
@@ -636,7 +638,7 @@ function Dashboard() {
           recordId,
           fileUrl,
           previewUrl: fileUrl, // Ekle: Modalda görselin görünmesi için
-          fileName,
+          fileName: originalFileName,
           status: 'pending',
           isTimeoutError: false,
           metrics: activeFields
@@ -651,7 +653,7 @@ function Dashboard() {
 
         if (!webhookResult.success && !webhookResult.isTimeout) {
           // Kesin hata durumu
-          newFailed.push({ recordId, fileUrl, fileName: currentFile.name, metrics: activeFields, isRetrying: false });
+          newFailed.push({ recordId, fileUrl, fileName: originalFileName, metrics: activeFields, isRetrying: false });
         } else if (webhookResult.success) {
           successCount++;
         }
