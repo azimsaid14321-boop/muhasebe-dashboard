@@ -416,7 +416,7 @@ function Dashboard() {
 
     try {
       console.log(`[Webhook] Senkron istek başlatılıyor... (Record ID: ${recordId})`);
-      const response = await fetch('https://resiniferous-gymnastically-aidan.ngrok-free.dev/webhook/analyze-receipt', {
+      const response = await fetch('https://n8n.otomasyonsistem.shop/webhook/analyze-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -830,7 +830,7 @@ function Dashboard() {
         ...parseExtractedData(item)
       }));
 
-      const response = await fetch('https://resiniferous-gymnastically-aidan.ngrok-free.dev/webhook/save-receipt', {
+      const response = await fetch('https://n8n.otomasyonsistem.shop/webhook/save-receipt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
