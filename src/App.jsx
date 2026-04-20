@@ -106,7 +106,7 @@ function Dashboard() {
   };
 
   const filteredVeriler = reports.filter(item =>
-    item.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    item.dosya_ismi?.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -342,7 +342,6 @@ function Dashboard() {
   const fetchReports = async () => {
     setLoadingReports(true);
     try {
-      // 1. Kullanıcıyı alıyoruz
       const { data: userData, error: userError } = await supabase.auth.getUser();
       const currentUser = userData?.user;
 
@@ -351,19 +350,17 @@ function Dashboard() {
         return;
       }
 
-      // 2. Güvenlik filtresi: Sadece sistemdeki aktif kullanıcının kendi ID'sine ait klasörü listeliyoruz
-      // Storage API olduğu için .eq('user_id', currentUser.id) yerine klasör path'ini currentUser.id olarak veriyoruz.
-      const { data, error } = await supabase.storage.from('raporlar').list(currentUser.id, {
-        limit: 100,
-        sortBy: { column: 'created_at', order: 'desc' }
-      });
+      // ARTIK VERİTABANINDAN ÇEKİYORUZ
+      const { data, error } = await supabase
+        .from('raporlar')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('olusturulma_tarihi', { ascending: false });
 
       if (error) {
         console.error('Error fetching reports:', error);
       } else {
-        // Filter out empty ghost files or folders and ONLY allow .xlsx files (Çöplük Onarımı)
-        const validFiles = data?.filter(file => file.name && file.name !== '.emptyFolderPlaceholder' && file.name.toLowerCase().includes('.xlsx')) || [];
-        setReports(validFiles);
+        setReports(data || []);
       }
     } catch (err) {
       console.error('Unexpected error fetching reports:', err);
@@ -1455,7 +1452,7 @@ function Dashboard() {
                         </tr>
                       ) : (
                         filteredVeriler.map((report, idx) => {
-                          const dateObj = report.created_at ? new Date(report.created_at) : null;
+                          const dateObj = report.olusturulma_tarihi ? new Date(report.olusturulma_tarihi) : null;
                           const formattedDate = dateObj
                             ? `${dateObj.getDate().toString().padStart(2, '0')}.${(dateObj.getMonth() + 1).toString().padStart(2, '0')}.${dateObj.getFullYear()} `
                             : '-';
@@ -1463,17 +1460,17 @@ function Dashboard() {
                           return (
                             <tr key={report.id || idx} className="hover:bg-white-[0.02] transition-colors group">
                               <td className="px-6 py-5 text-gray-400 font-data text-xs">{formattedDate}</td>
-                              <td className="px-6 py-5 text-white font-bold tracking-tight">{report.name}</td>
-                              <td className="px-6 py-5 text-gray-500 font-data">-</td>
+                              <td className="px-6 py-5 text-white font-bold tracking-tight">{report.dosya_ismi}</td>
+                              <td className="px-6 py-5 text-gray-500 font-data font-bold">{report.evrak_sayisi || '-'}</td>
                               <td className="px-6 py-5">
                                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-widest uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-inner font-data">
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]"></span>
-                                  TAMAMLANDI
+                                  {report.durum || 'TAMAMLANDI'}
                                 </span>
                               </td>
                               <td className="px-6 py-5 text-right">
                                 <button
-                                  onClick={() => handleDownload(report.name)}
+                                  onClick={() => handleDownload(report.dosya_yolu?.split('/').pop())}
                                   className="text-[#7B61FF] hover:text-[#917bfd] transition-colors p-2.5 rounded-xl hover:bg-[#7B61FF]/10 inline-flex border border-transparent hover:border-[#7B61FF]/30"
                                   title="İndir"
                                 >
