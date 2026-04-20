@@ -27,11 +27,11 @@
       font-src 'self' https://fonts.gstatic.com;
       img-src 'self' data: blob: https:;
       media-src 'self' blob:;
-      connect-src 'self'
-        https://szfzmznxeiwxseixyefa.supabase.co
-        wss://szfzmznxeiwxseixyefa.supabase.co
-        https://denemeazim10.app.n8n.cloud
-        https://resiniferous-gymnastically-aidan.ngrok-free.dev;
+      connect-src 'self' 
+          https://supa.otomasyonsistem.shop
+          wss://supa.otomasyonsistem.shop
+          https://n8n.otomasyonsistem.shop
+          https://resiniferous-gymnastically-aidan.ngrok-free.dev;
     """
     # HSTS (HTTPS zorunluluğu)
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
